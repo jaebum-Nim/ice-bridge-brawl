@@ -20,12 +20,12 @@ const S = (u, b, l) => b + l * (u.level - 1);
 /* ================= 영웅 ================= */
 export const ROLE = { tank: '탱커', mage: '마법사', adc: '원거리 딜러', fighter: '전사', assassin: '암살자', support: '서포터' };
 const BASES = {
-  tank: { hp: 690, hpL: 112, ad: 60, adL: 3.5, df: 38, dfL: 4.2, as: .65, asL: .015, ms: 340, range: 150 },
-  mage: { hp: 540, hpL: 92, ad: 52, adL: 3, df: 22, dfL: 3.6, as: .63, asL: .012, ms: 330, range: 550 },
-  adc: { hp: 560, hpL: 95, ad: 62, adL: 3.6, df: 24, dfL: 3.6, as: .68, asL: .03, ms: 330, range: 575 },
-  fighter: { hp: 660, hpL: 108, ad: 66, adL: 4, df: 34, dfL: 4.2, as: .65, asL: .02, ms: 345, range: 175 },
-  assassin: { hp: 580, hpL: 96, ad: 64, adL: 3.6, df: 28, dfL: 4, as: .67, asL: .022, ms: 350, range: 150 },
-  support: { hp: 560, hpL: 95, ad: 50, adL: 3, df: 26, dfL: 3.6, as: .62, asL: .012, ms: 335, range: 525 }
+  tank: { hp: 690, hpL: 112, ad: 77, adL: 5.5, df: 28, dfL: 3, as: .68, asL: .022, ms: 340, range: 160 },
+  mage: { hp: 540, hpL: 92, ad: 70, adL: 5.0, df: 16, dfL: 2.6, as: .66, asL: .02, ms: 330, range: 550 },
+  adc: { hp: 560, hpL: 95, ad: 86, adL: 6.1, df: 18, dfL: 2.6, as: .72, asL: .04, ms: 330, range: 575 },
+  fighter: { hp: 660, hpL: 108, ad: 88, adL: 6.6, df: 25, dfL: 3, as: .7, asL: .03, ms: 345, range: 185 },
+  assassin: { hp: 580, hpL: 96, ad: 86, adL: 6.1, df: 20, dfL: 2.8, as: .72, asL: .032, ms: 350, range: 160 },
+  support: { hp: 560, hpL: 95, ad: 66, adL: 4.4, df: 20, dfL: 2.6, as: .65, asL: .02, ms: 335, range: 525 }
 };
 function HD(o) { return Object.assign({}, BASES[o.role], o); }
 export const HEROES = [
@@ -101,24 +101,26 @@ export const ITEMS = {
   hour: { n: '전장의 모래시계', c: 2700, ad: 35, ah: 20, hp: 250 },
   belt: { n: '튼튼한 허리띠', c: 900, hp: 320 },
   heart: { n: '거인의 심장', c: 2900, hp: 750, df: 15 },
-  plate: { n: '빙하 판금', c: 2500, df: 65, hp: 200 }
+  plate: { n: '빙하 판금', c: 2500, df: 65, hp: 200 },
+  edge: { n: '예리한 칼날', c: 2800, ad: 45, crit: .25 },
+  scythe: { n: '흡혈의 낫', c: 2400, ad: 40, ls: .15 }
 };
-const BUILDS = { tank: ['boots', 'belt', 'heart', 'plate', 'hour', 'orb'], mage: ['boots', 'tome', 'staff', 'orb', 'plate', 'heart'], adc: ['boots', 'dagger', 'bow', 'great', 'sword', 'plate'], fighter: ['boots', 'sword', 'hour', 'heart', 'great', 'plate'], assassin: ['boots', 'sword', 'great', 'hour', 'bow', 'plate'], support: ['boots', 'tome', 'orb', 'heart', 'plate', 'belt'] };
-export function itemStats(it) { const p = []; if (it.ad) p.push('공격력 +' + it.ad); if (it.ap) p.push('주문력 +' + it.ap); if (it.hp) p.push('체력 +' + it.hp); if (it.df) p.push('방어력 +' + it.df); if (it.as) p.push('공격 속도 +' + Math.round(it.as * 100) + '%'); if (it.ms) p.push('이동 속도 +' + it.ms); if (it.ah) p.push('스킬 가속 +' + it.ah); return p.join(' · '); }
+const BUILDS = { tank: ['boots', 'belt', 'heart', 'plate', 'scythe', 'hour'], mage: ['boots', 'tome', 'staff', 'orb', 'plate', 'heart'], adc: ['boots', 'dagger', 'bow', 'edge', 'scythe', 'great'], fighter: ['boots', 'sword', 'scythe', 'hour', 'heart', 'edge'], assassin: ['boots', 'sword', 'edge', 'great', 'scythe', 'plate'], support: ['boots', 'tome', 'orb', 'heart', 'plate', 'belt'] };
+export function itemStats(it) { const p = []; if (it.ad) p.push('공격력 +' + it.ad); if (it.ap) p.push('주문력 +' + it.ap); if (it.hp) p.push('체력 +' + it.hp); if (it.df) p.push('방어력 +' + it.df); if (it.as) p.push('공격 속도 +' + Math.round(it.as * 100) + '%'); if (it.ms) p.push('이동 속도 +' + it.ms); if (it.ah) p.push('스킬 가속 +' + it.ah); if (it.crit) p.push('치명타 확률 +' + Math.round(it.crit * 100) + '%'); if (it.ls) p.push('생명력 흡수 ' + Math.round(it.ls * 100) + '%'); return p.join(' · '); }
 
 /* ================= 상태 ================= */
 let UID = 1;
 export let G = null;
-function mkUnit(o) { return Object.assign({ id: UID++, vx: 0, vy: 0, hp: o.maxHp || 1, shields: [], cc: { stun: 0, root: 0, slows: [] }, buffs: [], atkCd: 0, dead: false, target: null, moveTo: null, lastHitBy: {}, def: 0, atkT: -9, castT: -9 }, o); }
+function mkUnit(o) { const u = Object.assign({ id: UID++, vx: 0, vy: 0, hp: o.maxHp || 1, shields: [], cc: { stun: 0, root: 0, slows: [] }, buffs: [], atkCd: 0, dead: false, target: null, moveTo: null, lastHitBy: {}, def: 0, atkT: -9, castT: -9 }, o); u.hr = u.kind === 'hero' ? 58 : u.kind === 'minion' ? u.r + 8 : u.r; return u; }
 function mkHero(d, team, ctl) {
   const u = mkUnit({ kind: 'hero', hd: d, team, ctl, isPlayer: ctl === 'local', mobile: true, name: d.name, r: 42, level: 3, xp: 0, gold: 1400, items: [], k: 0, d: 0, a: 0, cds: [0, 0, 0, 0], spellCd: { D: 0, F: 0 }, maxHp: 1, x: FOUNTAIN[team].x + (team ? -1 : 1) * rand(0, 90), y: MID_Y + rand(-150, 150), respawnT: 0, mark: null, yOff: rand(-230, 230), aiT: rand(0, .3), mk: { n: 0, t: -99 } });
   recalc(u); u.hp = u.maxHp; return u;
 }
 export function recalc(u) {
   const d = u.hd, L = u.level - 1, old = u.maxHp;
-  const s = { maxHp: d.hp + d.hpL * L, ad: d.ad + d.adL * L, ap: 0, def: d.df + d.dfL * L, ms: d.ms, range: d.range, ah: 0 };
+  const s = { maxHp: d.hp + d.hpL * L, ad: d.ad + d.adL * L, ap: 0, def: d.df + d.dfL * L, ms: d.ms, range: d.range, ah: 0, crit: 0, ls: 0 };
   let asB = d.asL * L;
-  for (const id of u.items) { const it = ITEMS[id]; s.maxHp += it.hp || 0; s.ad += it.ad || 0; s.ap += it.ap || 0; s.def += it.df || 0; asB += it.as || 0; s.ms += it.ms || 0; s.ah += it.ah || 0; }
+  for (const id of u.items) { const it = ITEMS[id]; s.maxHp += it.hp || 0; s.ad += it.ad || 0; s.ap += it.ap || 0; s.def += it.df || 0; asB += it.as || 0; s.ms += it.ms || 0; s.ah += it.ah || 0; s.crit += it.crit || 0; s.ls += it.ls || 0; }
   s.as = Math.min(2.5, d.as * (1 + asB));
   Object.assign(u, s);
   if (old > 1) u.hp = clamp(u.hp + Math.max(0, u.maxHp - old), 1, u.maxHp);
@@ -140,7 +142,7 @@ function heroesAlive(team) { return G.heroes.filter(h => !h.dead && h.team === t
 export function newGame(opts) {
   UID = 1;
   const mode = opts.mode || '1v1';
-  G = { mode, t: 0, units: [], heroes: [], projs: [], zones: [], fxq: [], events: [], kills: [0, 0], wave: 0, nextWave: 12, diff: opts.diff ?? 1, over: false, winner: -1, first: false, relics: [], struct: [{}, {}], PID: 1 };
+  G = { mode, t: 0, units: [], heroes: [], projs: [], zones: [], fxq: [], events: [], kills: [0, 0], wave: 0, nextWave: 12, diff: opts.diff ?? 1, over: false, winner: -1, first: false, relics: [], struct: [{}, {}], PID: 1, stats: { auto: 0, abil: 0 } };
   for (const team of [0, 1]) {
     const X = x => team ? MAP_W - x : x;
     const outer = mkStruct('tower', team, X(1950), MID_Y), inner = mkStruct('tower', team, X(1200), MID_Y), nexus = mkStruct('nexus', team, X(560), MID_Y);
@@ -174,52 +176,71 @@ function spawnWave() {
 /* ================= 전투 도우미 ================= */
 export function canHitStructure(s) { const T = G.struct[s.team]; if (s === T.outer) return true; if (s === T.inner) return T.outer.dead; if (s === T.nexus) return T.outer.dead && T.inner.dead; return true; }
 export function targetable(u, t) { return t && !t.dead && t.team !== u.team && (t.mobile || canHitStructure(t)); }
-function enemiesIn(team, x, y, r, heroOnly) { return G.units.filter(e => !e.dead && e.team !== team && e.mobile && (!heroOnly || e.kind === 'hero') && Math.hypot(e.x - x, e.y - y) < r + e.r); }
+function enemiesIn(team, x, y, r, heroOnly) { return G.units.filter(e => !e.dead && e.team !== team && e.mobile && (!heroOnly || e.kind === 'hero') && Math.hypot(e.x - x, e.y - y) < r + e.hr); }
 function alliesIn(team, x, y, r) { return G.heroes.filter(e => !e.dead && e.team === team && Math.hypot(e.x - x, e.y - y) < r + e.r); }
 function stun(t, d) { if (t.mobile && !t.dead) t.cc.stun = Math.max(t.cc.stun, d); }
 function root(t, d) { if (t.mobile && !t.dead) t.cc.root = Math.max(t.cc.root, d); }
 function slow(t, p, d) { if (t.mobile && !t.dead) t.cc.slows.push({ p, t: d }); }
 function buff(u, type, v, d, extra) { u.buffs.push(Object.assign({ type, v, t: d }, extra || {})); }
 function shield(u, a, d) { u.shields.push({ a, t: d }); }
-function heal(u, a) { if (u.dead) return; const h = Math.min(a, u.maxHp - u.hp); u.hp += h; if (h > 5) ev({ t: 'text', x: u.x, y: u.y, s: '+' + Math.round(h), k: 'heal', team: u.team, to: u.id }); }
+function heal(u, a, quiet) { if (u.dead) return; const h = Math.min(a, u.maxHp - u.hp); u.hp += h; if (h > 5 && !quiet) ev({ t: 'text', x: u.x, y: u.y, s: '+' + Math.round(h), k: 'heal', team: u.team, to: u.id }); }
 function dashTo(u, x, y, speed, onEnd, forced, tgt) { [x, y] = clampMap(x, y, u.r); u.dash = { x, y, speed, onEnd, forced, tgt }; u.target = null; u.moveTo = null; }
 function blink(u, x, y) { fx('blink', u.x, u.y, { c: u.hd ? u.hd.color : '#ffffff' }); [x, y] = clampMap(x, y, u.r); u.x = x; u.y = y; u.px = x; u.py = y; fx('blink', x, y, { c: '#ffffff' }); }
 function aoeNow(u, x, y, r, fn, c) { for (const t of enemiesIn(u.team, x, y, r)) fn(t); fx('ring', x, y, { r, c: c || '#ffffff', fill: 1 }); }
 function proj(o) { G.projs.push(Object.assign({ id: G.PID++, trav: 0, hit: new Set(), pierce: 1 }, o)); }
 function zone(o) { G.zones.push(Object.assign({ id: G.PID++, t: 0 }, o)); }
 export function pickTarget(u, tx, ty, range, heroOnly) {
+  if (u.castTid) { const t = G.units.find(e => e.id === u.castTid); if (t && targetable(u, t) && t.mobile && (!heroOnly || t.kind === 'hero') && Math.hypot(t.x - u.x, t.y - u.y) < range + t.hr) return t; }
   let best = null, bs = 1e9;
   for (const e of enemiesIn(u.team, u.x, u.y, range, heroOnly)) { const s = Math.hypot(e.x - tx, e.y - ty) - (e.kind === 'hero' ? 180 : 0); if (s < bs) { bs = s; best = e; } } return best;
 }
 export function effMs(u) { let b = 0, s = 0; for (const x of u.buffs) if (x.type === 'ms') b += x.v; for (const x of u.cc.slows) s = Math.max(s, x.p); return u.ms * (1 + b) * (1 - s); }
 function moveToward(u, tx, ty, dt) { if (u.cc.root > 0 || u.cc.stun > 0) return false; const dx = tx - u.x, dy = ty - u.y, d = Math.hypot(dx, dy); if (d < 2) return true; const sp = effMs(u) * dt; if (sp >= d) { u.x = tx; u.y = ty; return true; } u.x += dx / d * sp; u.y += dy / d * sp; return false; }
 export function inRange(u, t, extra) { return Math.hypot(t.x - u.x, t.y - u.y) <= u.range + u.r * .5 + t.r + (extra || 0); }
+// 롤식 기본 공격: 선딜(공격 모션) 동안 멈춰 있다가 끝나는 순간 적중/발사. 선딜 중 이동하면 공격이 취소되고 쿨은 돌려받음
+function windupTime(u) { return Math.min(.3, .22 / u.as); }
 function doAttack(u, dt) {
   const t = u.target; if (!targetable(u, t)) { u.target = null; return false; }
-  if (inRange(u, t)) { u.face = Math.atan2(t.y - u.y, t.x - u.x); if (u.atkCd <= 0 && u.cc.stun <= 0) { u.atkCd = 1 / u.as; autoAttack(u, t); } return true; }
+  if (u.wind) return true;
+  if (inRange(u, t)) { u.face = Math.atan2(t.y - u.y, t.x - u.x); if (u.atkCd <= 0 && u.cc.stun <= 0) startAttack(u, t); return true; }
   moveToward(u, t.x, t.y, dt); return true;
+}
+function startAttack(u, t) {
+  u.atkCd = 1 / u.as; u.atkT = G.t; u.face = Math.atan2(t.y - u.y, t.x - u.x);
+  if (u.kind === 'tower') { autoAttack(u, t); return; }
+  u.wind = { t: windupTime(u), tgt: t };
+}
+export function cancelWind(u) { if (u.wind) { u.wind = null; u.atkCd = 0; u.atkT = -9; } }
+function tickWind(u, dt) {
+  const w = u.wind; if (!w) return;
+  if (u.cc.stun > 0 || !targetable(u, w.tgt) || !inRange(u, w.tgt, 120)) { cancelWind(u); return; }
+  u.face = Math.atan2(w.tgt.y - u.y, w.tgt.x - u.x);
+  w.t -= dt; if (w.t <= 0) { u.wind = null; autoAttack(u, w.tgt); }
 }
 function autoAttack(u, t) {
   let bonus = 0, sl = 0; const ei = u.buffs.findIndex(b => b.type === 'emp'); if (ei >= 0) { bonus = u.buffs[ei].v; sl = u.buffs[ei].slow; u.buffs.splice(ei, 1); }
-  u.atkT = G.t; u.face = Math.atan2(t.y - u.y, t.x - u.x);
-  const hit = () => { dmg(u, t, u.ad + bonus, 'p'); if (sl) slow(t, sl, 1); if (bonus) fx('ring', t.x, t.y, { r: 60, c: '#fbbf24' }); fx('hit', t.x, t.y, { c: u.hd ? u.hd.color : TEAMC[u.team] }); };
-  if (u.range > 250 || u.kind === 'tower') { const tw = u.kind === 'tower'; G.projs.push({ id: G.PID++, homing: true, owner: u, tgt: t, x: u.x, y: u.y, speed: tw ? 1300 : 1600, cb: hit, r: tw ? 24 : u.kind === 'hero' ? 13 : 9, color: tw ? TEAMC[u.team] : u.hd ? u.hd.color : TEAMC[u.team], kind: tw ? 'tower' : 'auto', z0: tw ? 340 : 60 }); }
-  else { setTimeout0(hit, u); fx('slash', t.x, t.y, { c: u.hd ? u.hd.color : '#ffffff', a: Math.atan2(t.y - u.y, t.x - u.x), dur: .2 }); }
+  const crit = u.crit > 0 && Math.random() < u.crit;
+  const amt = (u.ad + bonus) * (crit ? 1.75 : 1);
+  const hit = () => { const d = dmg(u, t, amt, crit ? 'crit' : 'p', true); if (u.ls && d > 0 && t.kind !== 'tower' && t.kind !== 'nexus') heal(u, d * u.ls, true); if (sl) slow(t, sl, 1); if (bonus) fx('ring', t.x, t.y, { r: 60, c: '#fbbf24' }); fx('hit', t.x, t.y, { c: crit ? '#fde047' : u.hd ? u.hd.color : TEAMC[u.team], big: crit }); };
+  if (u.range > 250 || u.kind === 'tower') { const tw = u.kind === 'tower'; G.projs.push({ id: G.PID++, homing: true, owner: u, tgt: t, x: u.x, y: u.y, speed: tw ? 1300 : 1800, cb: hit, r: tw ? 24 : u.kind === 'hero' ? 13 : 9, color: tw ? TEAMC[u.team] : u.hd ? u.hd.color : TEAMC[u.team], kind: tw ? 'tower' : 'auto', z0: tw ? 340 : 60 }); }
+  else { hit(); fx('slash', t.x, t.y, { c: crit ? '#fde047' : u.hd ? u.hd.color : '#ffffff', a: Math.atan2(t.y - u.y, t.x - u.x), dur: .2 }); }
 }
-// 근접 공격은 즉시 적중 (애니메이션은 렌더러가 atkT로 표현)
-function setTimeout0(fn) { fn(); }
-export function dmg(src, tg, amt, type) {
+const ABILITY_MULT = .6; // 스킬 피해 비중을 낮추고 평타 비중을 높임
+export function dmg(src, tg, amt, type, auto) {
   if (!tg || tg.dead) return 0;
   if (!tg.mobile && !canHitStructure(tg)) return 0;
   let a = amt;
+  if (src && src.kind === 'hero' && !auto) a *= ABILITY_MULT;
   if (src && src.kind === 'hero' && src.team === 1 && src.ctl === 'ai') a *= DIFF[G.diff].dmg;
   if (type !== 't') a *= 100 / (100 + Math.max(0, tg.def || 0));
+  if (type === 'crit') type = 'c';
   for (const b of tg.buffs) if (b.type === 'dr') a *= 1 - b.v;
   const shown = a;
   for (const s of tg.shields) { if (a <= 0) break; const k = Math.min(s.a, a); s.a -= k; a -= k; }
   if (tg.shields.length) tg.shields = tg.shields.filter(s => s.a > .5);
   tg.hp -= a; tg.lastDmgT = G.t; tg.hurtT = G.t;
   if (src && src.kind === 'hero' && tg.kind === 'hero') {
+    G.stats[auto ? 'auto' : 'abil'] += shown;
     tg.lastHitBy[src.id] = G.t; src.lastDmgT = G.t;
     for (const tw of G.units) if (tw.kind === 'tower' && !tw.dead && tw.team === tg.team && Math.hypot(tw.x - src.x, tw.y - src.y) < tw.range + src.r) tw.aggro = { u: src, t: 2.5 };
   }
@@ -236,7 +257,7 @@ function kill(u, src) {
   if (u.dead) return; u.dead = true; u.hp = 0; u.deadT = G.t;
   if (u.kind === 'minion') { if (src && src.kind === 'hero') { src.gold += u.gold; if (src.ctl !== 'ai') ev({ t: 'gold', x: u.x, y: u.y, s: '+' + u.gold + 'G', to: src.id }); } shareXp(1 - u.team, u.x, u.y, u.xp); fx('death', u.x, u.y, { c: TEAMC[u.team], small: 1 }); return; }
   if (u.kind === 'hero') {
-    u.d++; u.respawnT = Math.min(28, 5 + u.level * 1.4); u.target = null; u.moveTo = null; u.dash = null; u.buffs = []; u.shields = []; u.mark = null;
+    u.d++; u.respawnT = Math.min(28, 5 + u.level * 1.4); u.wind = null; u.pend = null; u.target = null; u.moveTo = null; u.dash = null; u.buffs = []; u.shields = []; u.mark = null;
     let killer = src && src.kind === 'hero' ? src : null;
     if (!killer) { let bt = -1; for (const h of G.heroes) if (h.team !== u.team && u.lastHitBy[h.id] && G.t - u.lastHitBy[h.id] < 10 && u.lastHitBy[h.id] > bt) { bt = u.lastHitBy[h.id]; killer = h; } }
     const assists = G.heroes.filter(h => h !== killer && h.team !== u.team && u.lastHitBy[h.id] && G.t - u.lastHitBy[h.id] < 10);
@@ -278,11 +299,20 @@ export function inBase(u) { return Math.abs(u.x - FOUNTAIN[u.team].x) < 700; }
 export function cmd(h, c) {
   if (!h || G.over) return;
   switch (c.c) {
-    case 'move': if (h.dead) return; h.target = null; h.moveTo = { x: c.x, y: c.y }; h.amove = false; break;
-    case 'atk': { if (h.dead) return; const t = G.units.find(u => u.id === c.id); if (targetable(h, t)) { h.target = t; h.moveTo = null; h.amove = false; } break; }
-    case 'amove': if (h.dead) return; h.moveTo = { x: c.x, y: c.y }; h.amove = true; h.target = null; break;
-    case 'stop': h.target = null; h.moveTo = null; h.amove = false; break;
-    case 'cast': tryCast(h, c.i, c.x, c.y); break;
+    case 'move': if (h.dead) return; cancelWind(h); h.pend = null; h.target = null; h.moveTo = { x: c.x, y: c.y }; h.amove = false; break;
+    case 'atk': { if (h.dead) return; const t = G.units.find(u => u.id === c.id); if (targetable(h, t)) { if (h.target !== t) cancelWind(h); h.pend = null; h.target = t; h.moveTo = null; h.amove = false; } break; }
+    case 'amove': if (h.dead) return; cancelWind(h); h.pend = null; h.moveTo = { x: c.x, y: c.y }; h.amove = true; h.target = null; break;
+    case 'stop': cancelWind(h); h.pend = null; h.target = null; h.moveTo = null; h.amove = false; break;
+    case 'cast': {
+      h.castTid = c.tid || 0;
+      const ab = h.hd.ab[c.i], tt = ab.ai.t;
+      if ((tt === 'target' || tt === 'exec') && c.tid && h.cds[c.i] <= 0 && !(c.i === 3 && h.level < 6)) {
+        const t = G.units.find(e => e.id === c.tid);
+        if (t && targetable(h, t) && Math.hypot(t.x - h.x, t.y - h.y) > ab.ai.range + t.hr) { cancelWind(h); h.pend = { i: c.i, tid: c.tid }; h.target = null; h.moveTo = null; break; }
+      }
+      if (tryCast(h, c.i, c.x, c.y)) { h.pend = null; if (!SELF_T.includes(tt)) cancelWind(h); }
+      h.castTid = 0; break;
+    }
     case 'spell': useSpell(h, c.k, c.x, c.y); break;
     case 'buy': { const it = ITEMS[c.id]; if (!it || !(h.dead || inBase(h)) || h.items.includes(c.id) || h.gold < it.c || h.items.length >= 6) return; h.gold -= it.c; h.items.push(c.id); recalc(h); break; }
     case 'sell': { if (!(h.dead || inBase(h))) return; const id = h.items[c.i]; if (!id) return; h.gold += Math.floor(ITEMS[id].c * .7); h.items.splice(c.i, 1); recalc(h); break; }
@@ -308,7 +338,7 @@ function aiTower(u, dt) {
   if (u.aggro) { u.aggro.t -= dt; if (u.aggro.t <= 0) u.aggro = null; }
   if (u.aggro && inR(u.aggro.u)) u.target = u.aggro.u;
   else if (!inR(u.target)) { u.target = null; let bd = 1e9; for (const e of G.units) { if (!e.mobile || !inR(e)) continue; const d = Math.hypot(e.x - u.x, e.y - u.y) + (e.kind === 'hero' ? 5000 : 0); if (d < bd) { bd = d; u.target = e; } } }
-  if (u.target && u.atkCd <= 0) { u.atkCd = 1 / u.as; autoAttack(u, u.target); }
+  if (u.target && u.atkCd <= 0) startAttack(u, u.target);
 }
 function frontX(team) { const f = team ? -1 : 1; let best = null; for (const m of G.units) { if (m.kind !== 'minion' || m.dead || m.team !== team) continue; if (best === null || m.x * f > best * f) best = m.x; } return best; }
 function towerTanked(tw, team) { return G.units.some(m => m.kind === 'minion' && !m.dead && m.team === team && Math.hypot(m.x - tw.x, m.y - tw.y) < tw.range - 40); }
@@ -322,7 +352,7 @@ function laneSpot(u) {
 function predict(u, t, a, D) { const d = dist(u, t); const tm = (a.speed ? d / a.speed : 0) + (a.delay || 0); return [t.x + t.vx * tm * D.acc + rand(-D.err, D.err), t.y + t.vy * tm * D.acc + rand(-D.err, D.err)]; }
 function minionCluster(u, range, r) { const ms = G.units.filter(e => e.kind === 'minion' && !e.dead && e.team !== u.team && dist(u, e) < range); let best = null; for (const m of ms) { let n = 0; for (const o of ms) if (dist(m, o) < r) n++; if (!best || n > best.n) best = { n, x: m.x, y: m.y }; } return best; }
 function dodgeVec(u) {
-  for (const p of G.projs) { if (p.homing || p.owner.team === u.team) continue; const rx = u.x - p.x, ry = u.y - p.y; const along = rx * p.dx + ry * p.dy; if (along < 0 || along > 650) continue; const perp = rx * -p.dy + ry * p.dx; if (Math.abs(perp) < p.r + u.r + 15) { const s = perp >= 0 ? 1 : -1; return [-p.dy * s, p.dx * s]; } }
+  for (const p of G.projs) { if (p.homing || p.owner.team === u.team) continue; const rx = u.x - p.x, ry = u.y - p.y; const along = rx * p.dx + ry * p.dy; if (along < 0 || along > 650) continue; const perp = rx * -p.dy + ry * p.dx; if (Math.abs(perp) < p.r + u.hr + 10) { const s = perp >= 0 ? 1 : -1; return [-p.dy * s, p.dx * s]; } }
   for (const z of G.zones) { if (z.fired || z.line || z.owner.team === u.team) continue; const d = Math.hypot(u.x - z.x, u.y - z.y); if (d < z.r + u.r) return norm(u.x - z.x, u.y - z.y); }
   return null;
 }
@@ -354,6 +384,7 @@ function aiHero(u, dt) {
   const D = u.team === 1 ? DIFF[G.diff] : DIFF[1];
   u.aiT -= dt; if (u.aiT <= 0) { u.aiT = D.react * rand(.8, 1.2); aiDecide(u, D); }
   if (u.target) { if (!targetable(u, u.target)) u.target = null; else { doAttack(u, dt); return; } }
+  if (u.wind) return;
   if (u.moveTo && moveToward(u, u.moveTo.x, u.moveTo.y, dt)) u.moveTo = null;
 }
 function aiDecide(u, D) {
@@ -398,6 +429,12 @@ function aiDecide(u, D) {
 /* ================= 사람이 조작하는 영웅 ================= */
 function nearestEnemy(u, r) { let best = null, bd = 1e9; for (const e of G.units) { if (!targetable(u, e)) continue; const d = Math.hypot(e.x - u.x, e.y - u.y) - e.r; if (d < r && d < bd) { bd = d; best = e; } } return best; }
 function humanCtl(u, dt) {
+  if (u.pend) { // 대상 지정 스킬: 사거리 안으로 걸어간 뒤 시전
+    const t = G.units.find(e => e.id === u.pend.tid), ab = u.hd.ab[u.pend.i];
+    if (!t || !targetable(u, t) || u.cds[u.pend.i] > 0) u.pend = null;
+    else if (Math.hypot(t.x - u.x, t.y - u.y) <= ab.ai.range + t.hr) { u.castTid = t.id; tryCast(u, u.pend.i, t.x, t.y); u.castTid = 0; u.pend = null; u.target = t; }
+    else { moveToward(u, t.x, t.y, dt); u.face = Math.atan2(t.y - u.y, t.x - u.x); return; }
+  }
   if (u.target && !targetable(u, u.target)) u.target = null;
   if (u.target) { doAttack(u, dt); return; }
   if (u.moveTo) {
@@ -405,7 +442,7 @@ function humanCtl(u, dt) {
     u.face = Math.atan2(u.moveTo.y - u.y, u.moveTo.x - u.x);
     if (moveToward(u, u.moveTo.x, u.moveTo.y, dt)) { u.moveTo = null; u.amove = false; } return;
   }
-  const e = nearestEnemy(u, u.range + u.r * .5); if (e && inRange(u, e) && u.atkCd <= 0 && u.cc.stun <= 0) { u.atkCd = 1 / u.as; autoAttack(u, e); }
+  if (u.wind) return; const e = nearestEnemy(u, u.range + u.r * .5); if (e && inRange(u, e) && u.atkCd <= 0 && u.cc.stun <= 0) startAttack(u, e);
 }
 
 /* ================= 업데이트 ================= */
@@ -443,6 +480,7 @@ export function update(dt) {
     if (u.kind === 'tower') { aiTower(u, dt); continue; }
     if (u.kind === 'nexus') continue;
     u.px = u.x; u.py = u.y;
+    if (u.wind) tickWind(u, dt);
     if (u.dash) doDash(u, dt);
     else if (u.cc.stun <= 0) {
       if (u.kind === 'minion') aiMinion(u, dt);
@@ -458,9 +496,9 @@ export function update(dt) {
 function updateProjs(dt) {
   for (const p of G.projs) {
     if (p.homing) { if (p.tgt.dead) { p.done = true; continue; } const dx = p.tgt.x - p.x, dy = p.tgt.y - p.y, d = Math.hypot(dx, dy), st = p.speed * dt; if (d <= st + p.tgt.r * .5) { p.done = true; p.cb(); } else { p.x += dx / d * st; p.y += dy / d * st; } continue; }
-    const st = p.speed * dt; p.x += p.dx * st; p.y += p.dy * st; p.trav += st;
+    const st = p.speed * dt, ox = p.x, oy = p.y; p.x += p.dx * st; p.y += p.dy * st; p.trav += st;
     const hs = p.shared || p.hit;
-    for (const e of G.units) { if (e.dead || !e.mobile || e.team === p.owner.team || hs.has(e.id)) continue; if (Math.hypot(e.x - p.x, e.y - p.y) < p.r + e.r) { hs.add(e.id); p.onHit(e); fx('hit', e.x, e.y, { c: p.color }); if (--p.pierce <= 0) { p.done = true; break; } } }
+    for (const e of G.units) { if (e.dead || !e.mobile || e.team === p.owner.team || hs.has(e.id)) continue; if (segDist(e.x, e.y, ox, oy, p.x, p.y) < p.r + e.hr) { hs.add(e.id); p.onHit(e); fx('hit', e.x, e.y, { c: p.color }); if (--p.pierce <= 0) { p.done = true; break; } } }
     if (p.trav >= p.range || p.x < -200 || p.x > MAP_W + 200) p.done = true;
   }
   G.projs = G.projs.filter(p => !p.done);
@@ -469,7 +507,7 @@ function segDist(px, py, x1, y1, x2, y2) { const dx = x2 - x1, dy = y2 - y1, l =
 function updateZones(dt) {
   for (const z of G.zones) {
     z.t += dt; if (z.t >= z.delay) {
-      const ts = z.line ? G.units.filter(e => !e.dead && e.mobile && e.team !== z.owner.team && segDist(e.x, e.y, z.x, z.y, z.x2, z.y2) < z.w / 2 + e.r) : enemiesIn(z.owner.team, z.x, z.y, z.r);
+      const ts = z.line ? G.units.filter(e => !e.dead && e.mobile && e.team !== z.owner.team && segDist(e.x, e.y, z.x, z.y, z.x2, z.y2) < z.w / 2 + e.hr) : enemiesIn(z.owner.team, z.x, z.y, z.r);
       z.onTrigger(ts); z.fired = true;
       if (z.line) fx('beam', z.x, z.y, { x2: z.x2, y2: z.y2, c: z.color, w: z.w, dur: .6 }); else fx(z.vines ? 'vines' : 'burst', z.x, z.y, { r: z.r, c: z.color });
     }

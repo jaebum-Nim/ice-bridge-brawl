@@ -148,10 +148,9 @@ export function buildTower(team, tc) {
   for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + Math.PI / 4; g.add(M(cone(.09, .5, 4), stone, Math.cos(a) * .5, 3.3, Math.sin(a) * .5)); }
   const crystal = M(new THREE.OctahedronGeometry(.34, 0), emis(tc, 1.6, { transparent: true, opacity: .95 }), 0, 3.6, 0, false); crystal.scale.y = 1.6; g.add(crystal);
   const glow = glowSprite(tc, 1.8, .45); glow.position.y = 3.6; g.add(glow);
-  const light = new THREE.PointLight(tc, 6, 7, 1.6); light.position.y = 3.3; g.add(light);
   const rubble = new THREE.Group(); for (let i = 0; i < 9; i++) { const r = M(new THREE.DodecahedronGeometry(.18 + Math.random() * .2, 0), i % 3 ? stone : dstone, (Math.random() - .5) * 1.4, .12, (Math.random() - .5) * 1.4); r.rotation.set(Math.random() * 3, Math.random() * 3, 0); rubble.add(r); } rubble.visible = false; g.add(rubble);
   const alive = g.children.filter(c => c !== rubble);
-  return { g, crystal, glow, light, rubble, alive };
+  return { g, crystal, glow, rubble, alive };
 }
 export function buildNexus(team, tc) {
   const g = new THREE.Group(), stone = mat(0x6b7890), dstone = mat(0x3d475a);
@@ -163,8 +162,7 @@ export function buildNexus(team, tc) {
   const c0 = M(new THREE.OctahedronGeometry(.6, 0), cm, 0, 0, 0, false); c0.scale.y = 1.9; cr.add(c0);
   for (let i = 0; i < 3; i++) { const a = i * 2.09; const c = M(new THREE.OctahedronGeometry(.28, 0), cm, Math.cos(a) * .7, -.4, Math.sin(a) * .7, false); c.scale.y = 1.7; c.rotation.z = Math.cos(a) * .4; c.rotation.x = Math.sin(a) * .4; cr.add(c); }
   g.add(cr); const glow = glowSprite(tc, 3.5, .35); glow.position.y = 2.1; g.add(glow);
-  const light = new THREE.PointLight(tc, 10, 10, 1.5); light.position.y = 2.2; g.add(light);
   const rubble = new THREE.Group(); for (let i = 0; i < 14; i++) { const r = M(new THREE.OctahedronGeometry(.15 + Math.random() * .3, 0), i % 2 ? cm : stone, (Math.random() - .5) * 2.4, .5, (Math.random() - .5) * 2.4); r.rotation.set(Math.random() * 3, Math.random() * 3, 0); rubble.add(r); } rubble.visible = false; g.add(rubble);
   const alive = g.children.filter(c => c !== rubble);
-  return { g, crystal: cr, glow, light, rubble, alive };
+  return { g, crystal: cr, glow, rubble, alive };
 }

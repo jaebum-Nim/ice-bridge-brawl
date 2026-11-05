@@ -58,6 +58,7 @@ export class Hud {
     for (const m of S.feed) { c.globalAlpha = Math.min(1, m.t); c.font = `700 13px ${FONT}`; const sep = '  ⚔  ', vw = c.measureText(m.v).width, sw = c.measureText(sep).width, kw = c.measureText(m.k).width; this.rr(W - 12 - vw - sw - kw - 16, fy - 15, vw + sw + kw + 16, 22, 6); c.fillStyle = 'rgba(8,14,28,.8)'; c.fill(); c.textAlign = 'right'; c.fillStyle = m.vc; c.fillText(m.v, W - 20, fy); c.fillStyle = '#c6d4ea'; c.fillText(sep, W - 20 - vw, fy); c.fillStyle = m.kc; c.fillText(m.k, W - 20 - vw - sw, fy); fy += 26; }
     c.globalAlpha = 1;
     if (S.banner) { const b = S.banner; c.globalAlpha = Math.min(1, b.t * 2, (b.max - b.t) * 4 + .2); c.font = `900 30px ${FONT}`; const bw = c.measureText(b.s).width + 50; this.rr(W / 2 - bw / 2, H * .16 - 36, bw, 52, 12); c.fillStyle = 'rgba(8,14,28,.8)'; c.fill(); this.txt(b.s, W / 2, H * .16, 30, b.c, 'center', 900); c.globalAlpha = 1; }
+    if (S.fps) this.txt(`${S.fps} FPS`, 12, 22, 12, S.fps < 30 ? '#fca5a5' : 'rgba(200,214,234,.6)', 'left', 700);
     this.panel(G, S);
     if (S.tab) this.score(G);
     if (S.paused && !S.shopOpen) { c.fillStyle = 'rgba(4,8,16,.6)'; c.fillRect(0, 0, W, H); this.txt('일시정지', W / 2, H / 2 - 10, 40, '#e6eefc', 'center', 900); this.txt('Esc 키로 계속하기', W / 2, H / 2 + 24, 15, '#a9bbd6', 'center'); }

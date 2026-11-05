@@ -8,8 +8,9 @@ const glCv = document.getElementById('gl'), hudCv = document.getElementById('hud
 let R = null, hud = null, G = null;
 const S = { aiming: -1, amove: false, tab: false, paused: false, shopOpen: false, camOff: 0, texts: [], feed: [], banner: null, mx: 0, my: 0, mouse: { x: 0, y: 0 }, rightDown: false, canHit: u => Sim.canHitStructure(u) };
 const $ = id => document.getElementById(id);
-let quality = 'high';
-try { quality = localStorage.getItem('ibb-quality') || 'high'; } catch (e) { }
+let quality = 'high', castMode = 'normal'; // normal: 롤 기본(키→클릭), quick: 키 누르는 즉시, release: 떼는 순간
+try { quality = localStorage.getItem('ibb-quality') || 'high'; castMode = localStorage.getItem('ibb-cast') || 'normal'; } catch (e) { }
+const AIM_H = .75; // 스킬 조준은 몸통 높이 기준 (투사체가 날아가는 높이)
 
 function initGfx() {
   if (R) return true;
@@ -29,7 +30,7 @@ function handleEvents() {
     if (e.t === 'banner') banner(e.s, e.c, e.d);
     else if (e.t === 'text') {
       if (e.to === p.id) { if (e.k === 'heal') addText(e.x, e.y, e.s, '#5ef08a'); else if (G.heroes.some(h => h.id === e.from)) addText(e.x, e.y, e.s, '#ff6b6b'); }
-      else if (e.from === p.id) addText(e.x + (Math.random() - .5) * 40, e.y, e.s, e.k === 'm' ? '#c4b5fd' : e.k === 't' ? '#ffffff' : '#fdba74', e.s >= 200);
+      else if (e.from === p.id) addText(e.x + (Math.random() - .5) * 40, e.y, e.k === 'c' ? e.s + '!' : e.s, e.k === 'm' ? '#c4b5fd' : e.k === 't' ? '#ffffff' : e.k === 'c' ? '#fde047' : '#fdba74', e.k === 'c' || e.s >= 200);
       else if (e.k === 'heal' && e.team === p.team) addText(e.x, e.y, e.s, '#5ef08a');
     }
     else if (e.t === 'gold') { if (e.to === p.id) addText(e.x, e.y, e.s, '#facc15'); }
@@ -49,17 +50,22 @@ function handleEvents() {
 }
 
 /* ---------------- 루프 ---------------- */
-let last = performance.now();
+// 고정 간격(1/60초) 시뮬레이션. 화면이 0.1초 넘게 멈추면 그 시간은 버려서
+// 내가 화면을 못 보는 동안 게임이 혼자 진행되지 않게 함
+const STEP = 1 / 60;
+let last = performance.now(), acc = 0, fpsT = 0, fpsN = 0;
 function frame(now) {
-  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  const raw = (now - last) / 1000; last = now;
+  const dt = Math.min(raw, .1);
+  fpsT += raw; fpsN++; if (fpsT >= .5) { S.fps = Math.round(fpsN / fpsT); fpsT = 0; fpsN = 0; }
   if (G) {
-    if (!S.paused && !G.over) Sim.update(dt);
+    if (!S.paused && !G.over) { acc += dt; let n = 0; while (acc >= STEP && n < 6) { Sim.update(STEP); acc -= STEP; n++; } if (n >= 6) acc = 0; }
     handleEvents();
     for (const t of S.texts) { t.t -= dt; t.rise += dt * .9; } S.texts = S.texts.filter(t => t.t > 0);
     for (const m of S.feed) m.t -= dt; S.feed = S.feed.filter(m => m.t > 0);
     if (S.banner) { S.banner.t -= dt; if (S.banner.t <= 0) S.banner = null; }
-    S.mouse = R.pick(S.mx, S.my); S.dt = dt;
-    R.render(G, S.paused ? 0 : dt, { aiming: S.aiming, mouse: S.mouse, camOff: S.camOff });
+    S.mouse = R.pick(S.mx, S.my); S.aimPt = R.pickAt(S.mx, S.my, AIM_H); S.dt = dt;
+    R.render(G, S.paused ? 0 : dt, { aiming: S.aiming, mouse: S.aimPt, camOff: S.camOff });
     hud.draw(G, R, S);
     hoverCursor();
   }
@@ -69,15 +75,25 @@ requestAnimationFrame(frame);
 
 /* ---------------- 입력 ---------------- */
 function playing() { return G && !G.over && !S.paused; }
+// 화면에서 유닛 모델(발부터 머리까지)과 마우스 사이 거리로 판정. 영웅을 미니언보다 우선
 function unitUnderMouse(filter) {
   let best = null, bd = 1e9;
   for (const u of G.units) {
     if (u.dead || !filter(u)) continue;
-    const hgt = u.kind === 'hero' ? .9 : u.kind === 'minion' ? .4 : u.kind === 'tower' ? 1.6 : 1.2;
-    const s = R.project(u.x, u.y, hgt), rad = u.kind === 'hero' ? 42 : u.kind === 'minion' ? 26 : 70;
-    const d = Math.hypot(s.x - S.mx, s.y - S.my); if (d < rad && d < bd) { bd = d; best = u; }
+    const top = u.kind === 'hero' ? 1.9 : u.kind === 'minion' ? .9 : u.kind === 'tower' ? 3.8 : 2.8;
+    const a = R.project(u.x, u.y, 0), b = R.project(u.x, u.y, top), e = R.project(u.x + u.hr, u.y, 0);
+    const rad = Math.max(16, Math.hypot(e.x - a.x, e.y - a.y) * 1.05);
+    const d = segD(S.mx, S.my, a.x, a.y, b.x, b.y) - (u.kind === 'hero' ? 12 : 0);
+    if (d < rad && d < bd) { bd = d; best = u; }
   }
   return best;
+}
+function segD(px, py, x1, y1, x2, y2) { const dx = x2 - x1, dy = y2 - y1, l = dx * dx + dy * dy; let t = l ? ((px - x1) * dx + (py - y1) * dy) / l : 0; t = Math.max(0, Math.min(1, t)); return Math.hypot(px - x1 - t * dx, py - y1 - t * dy); }
+function castNow(i) {
+  const p = G.player; const tt = p.hd.ab[i].ai.t;
+  const tgt = (tt === 'target' || tt === 'exec') ? unitUnderMouse(u => targetable(p, u) && u.mobile && (tt !== 'exec' || u.kind === 'hero')) : null;
+  const pt = R.pickAt(S.mx, S.my, AIM_H);
+  cmd(p, { c: 'cast', i, x: tgt ? tgt.x : pt.x, y: tgt ? tgt.y : pt.y, tid: tgt ? tgt.id : 0 });
 }
 function hoverCursor() { if (!playing()) return; const e = unitUnderMouse(u => targetable(G.player, u)); hudCv.style.cursor = e ? 'pointer' : 'crosshair'; }
 function rightClick(drag) {
@@ -92,7 +108,7 @@ hudCv.addEventListener('mousedown', e => {
   S.mx = e.clientX; S.my = e.clientY; if (!playing()) return; S.mouse = R.pick(S.mx, S.my); const p = G.player;
   if (e.button === 2) { S.rightDown = true; rightClick(false); }
   else if (e.button === 0) {
-    if (S.aiming >= 0) { cmd(p, { c: 'cast', i: S.aiming, x: S.mouse.x, y: S.mouse.y }); S.aiming = -1; }
+    if (S.aiming >= 0) { castNow(S.aiming); S.aiming = -1; }
     else if (S.amove && !p.dead) { cmd(p, { c: 'amove', x: S.mouse.x, y: S.mouse.y }); S.amove = false; R.clickMarker(S.mouse.x, S.mouse.y, '#f87171'); }
   }
 });
@@ -102,12 +118,12 @@ const KIDX = { KeyQ: 0, KeyW: 1, KeyE: 2, KeyR: 3 };
 window.addEventListener('keydown', e => {
   if (!G) return; const c = e.code;
   if (c === 'Tab') { e.preventDefault(); S.tab = true; return; }
-  if (c === 'Escape') { if (S.shopOpen) closeShop(); else if (!G.over) S.paused = !S.paused; return; }
+  if (c === 'Escape') { if (S.shopOpen) closeShop(); else if (S.aiming >= 0) S.aiming = -1; else if (!G.over) S.paused = !S.paused; return; }
   if (c === 'KeyP' || c === 'KeyB') { if (S.shopOpen) closeShop(); else if (playing()) openShop(); return; }
   if (!playing()) return; const p = G.player;
-  if (c in KIDX) { e.preventDefault(); if (e.repeat || p.dead) return; const i = KIDX[c]; if (SELF_T.includes(p.hd.ab[i].ai.t)) cmd(p, { c: 'cast', i, x: S.mouse.x, y: S.mouse.y }); else S.aiming = i; return; }
+  if (c in KIDX) { e.preventDefault(); if (e.repeat || p.dead) return; const i = KIDX[c]; if (SELF_T.includes(p.hd.ab[i].ai.t) || castMode === 'quick') { castNow(i); S.aiming = -1; } else S.aiming = i; return; }
   if (c === 'KeyD') cmd(p, { c: 'spell', k: 'D', x: S.mouse.x, y: S.mouse.y });
-  else if (c === 'KeyF') cmd(p, { c: 'spell', k: 'F', x: S.mouse.x, y: S.mouse.y });
+  else if (c === 'KeyF') { const pt = R.pickAt(S.mx, S.my, AIM_H); cmd(p, { c: 'spell', k: 'F', x: pt.x, y: pt.y }); }
   else if (c === 'KeyS') cmd(p, { c: 'stop' });
   else if (c === 'KeyA') S.amove = true;
   else if (c === 'Space') { e.preventDefault(); S.camOff = 0; }
@@ -115,7 +131,7 @@ window.addEventListener('keydown', e => {
 });
 window.addEventListener('keyup', e => {
   if (!G) return; const c = e.code; if (c === 'Tab') { S.tab = false; return; }
-  if (c in KIDX && S.aiming === KIDX[c]) { if (playing()) cmd(G.player, { c: 'cast', i: S.aiming, x: S.mouse.x, y: S.mouse.y }); S.aiming = -1; }
+  if (castMode === 'release' && c in KIDX && S.aiming === KIDX[c]) { if (playing()) castNow(S.aiming); S.aiming = -1; }
 });
 
 /* ---------------- 상점 ---------------- */
@@ -152,14 +168,16 @@ function buildMenu() {
   <h3>내 영웅</h3><div class="grid">${heroCards(M.hero, 'h')}</div>
   ${M.mode === '1v1' ? `<h3>상대 영웅</h3><div class="grid small">${heroCards(M.enemy, 'e')}</div>` : ''}
   <div class="row"><span class="lbl">AI 난이도</span><div class="seg">${DIFF.map((d, i) => `<button data-d="${i}" class="${M.diff === i ? 'on' : ''}">${d.name}</button>`).join('')}</div>
-  <span class="lbl">그래픽</span><div class="seg"><button data-q="high" class="${quality === 'high' ? 'on' : ''}">높음</button><button data-q="low" class="${quality === 'low' ? 'on' : ''}">낮음</button></div>
+  <span class="lbl">그래픽</span><div class="seg">${[['high', '높음'], ['mid', '중간'], ['low', '낮음']].map(([k, n]) => `<button data-q="${k}" class="${quality === k ? 'on' : ''}">${n}</button>`).join('')}</div>
+  </div><div class="row" style="margin-top:12px"><span class="lbl">스킬 시전</span><div class="seg">${[['normal', '일반 (키 → 클릭)'], ['quick', '빠른 시전 (키 즉시)'], ['release', '키 떼면 시전']].map(([k, n]) => `<button data-c="${k}" class="${castMode === k ? 'on' : ''}">${n}</button>`).join('')}</div>
   <div style="flex:1"></div><button class="btn" id="go">게임 시작</button></div>
   <div id="menuErr" class="err"></div>
-  <div class="help"><b>조작법</b><br><kbd>우클릭</kbd> 이동·공격 (누른 채 끌면 계속 이동) &nbsp; <kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd><kbd>R</kbd> 스킬: 누르고 있으면 조준, 떼면 시전 &nbsp; <kbd>D</kbd> 점멸 &nbsp; <kbd>F</kbd> 눈덩이 (맞춘 뒤 다시 <kbd>F</kbd>로 돌진)<br><kbd>A</kbd>+좌클릭 공격 이동 &nbsp; <kbd>S</kbd> 정지 &nbsp; <kbd>P</kbd> 상점 (기지 또는 사망 시) &nbsp; <kbd>Tab</kbd> 점수판 &nbsp; <kbd>←</kbd><kbd>→</kbd> 카메라, <kbd>Space</kbd> 복귀 &nbsp; <kbd>Esc</kbd> 일시정지<br>전투에서 벗어나면 체력이 천천히 차고, 다리 위 초록 구슬을 먹으면 즉시 회복됩니다. 적 분수대에 들어가면 순식간에 녹습니다. 화면이 버벅이면 그래픽을 '낮음'으로 바꿔보세요.</div></div>`;
+  <div class="help"><b>조작법</b><br><kbd>우클릭</kbd> 이동·공격 (누른 채 끌면 계속 이동) &nbsp; <kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd><kbd>R</kbd> 스킬 (시전 방식은 위에서 선택, 조준 중 <kbd>우클릭</kbd>/<kbd>Esc</kbd> 취소) &nbsp; <kbd>D</kbd> 점멸 &nbsp; <kbd>F</kbd> 눈덩이 (맞춘 뒤 다시 <kbd>F</kbd>로 돌진)<br><kbd>A</kbd>+좌클릭 공격 이동 &nbsp; <kbd>S</kbd> 정지 &nbsp; <kbd>P</kbd> 상점 (기지 또는 사망 시) &nbsp; <kbd>Tab</kbd> 점수판 &nbsp; <kbd>←</kbd><kbd>→</kbd> 카메라, <kbd>Space</kbd> 복귀 &nbsp; <kbd>Esc</kbd> 일시정지<br>전투에서 벗어나면 체력이 천천히 차고, 다리 위 초록 구슬을 먹으면 즉시 회복됩니다. 적 분수대에 들어가면 순식간에 녹습니다. 화면이 버벅이면 그래픽을 '낮음'으로 바꿔보세요.</div></div>`;
   m.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { M.mode = b.dataset.mode; buildMenu(); });
   m.querySelectorAll('[data-h]').forEach(c => c.onclick = () => { M.hero = c.dataset.h; buildMenu(); });
   m.querySelectorAll('[data-e]').forEach(c => c.onclick = () => { M.enemy = c.dataset.e; buildMenu(); });
   m.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { M.diff = +b.dataset.d; buildMenu(); });
+  m.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { castMode = b.dataset.c; try { localStorage.setItem('ibb-cast', castMode); } catch (e) { } buildMenu(); });
   m.querySelectorAll('[data-q]').forEach(b => b.onclick = () => { quality = b.dataset.q; try { localStorage.setItem('ibb-quality', quality); } catch (e) { } if (R) R.setQuality(quality); buildMenu(); });
   $('go').onclick = startGame;
 }

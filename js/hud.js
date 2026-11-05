@@ -22,7 +22,7 @@ export class Hud {
     // 유닛 위 체력바
     for (const u of G.units) {
       if (u.dead) continue;
-      const hgt = u.kind === 'hero' ? 2.15 : u.kind === 'minion' ? (u.mk === 's' ? 1.0 : .95) : u.kind === 'tower' ? 4.5 : 3.6;
+      const hgt = u.kind === 'hero' ? 2.35 : u.kind === 'minion' ? (u.mk === 's' ? 1.0 : .95) : u.kind === 'tower' ? 4.5 : 3.6;
       const s = R.project(u.x, u.y, hgt); if (!s.vis || s.x < -100 || s.x > W + 100 || s.y < -50 || s.y > H + 50) continue;
       const ally = u.team === p.team;
       if (u.kind === 'hero') {

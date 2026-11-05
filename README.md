@@ -58,7 +58,8 @@ python3 tools/build_single.py   # 고친 내용을 play.html에 반영
 | `js/sim.js` | 게임 규칙 전부 (영웅, 스킬, 아이템, AI, 전투). 화면과 분리되어 Node에서도 돌아감 |
 | `js/render3d.js` | Three.js 3D 렌더러 (조명, 이펙트, 파티클). 셰이더를 줄이려고 Lambert/Basic 재질만 사용, 그림자·후처리 없음 |
 | `js/blocks.js` | 마인크래프트 스타일 블록 월드 (코드로 그린 16×16 픽셀 텍스처, 블록 종류별 인스턴싱) |
-| `js/models.js` | 코드로 만든 로우폴리 영웅·미니언·포탑·넥서스 모델 |
+| `js/heroes3d.js` | 영웅 모델: 관절 뼈대, 카툰 셰이딩 + 외곽선, 역할별 공격 동작 (칼 휘두르기·활 당기기·지팡이 찌르기·주먹) |
+| `js/models.js` | 미니언·포탑·넥서스 모델 |
 | `js/hud.js` | 체력바, 피해 숫자, 하단 패널, 미니맵 등 2D 오버레이 |
 | `js/main.js` | 메뉴, 입력, 상점, 게임 루프 |
 | `vendor/three/` | Three.js r187 (MIT) |

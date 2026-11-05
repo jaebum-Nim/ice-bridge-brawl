@@ -1,7 +1,8 @@
 // Three.js 3D 렌더러
 import * as THREE from 'three';
 import { buildBlockWorld } from './blocks.js';
-import { K, glowTex, glowSprite, mat, emis, buildHero, buildMinion, buildTower, buildNexus } from './models.js';
+import { K, glowTex, glowSprite, mat, emis, buildMinion, buildTower, buildNexus } from './models.js';
+import { buildHero } from './heroes3d.js';
 import { MAP_W, LANE_Y1, LANE_Y2, MID_Y, FOUNTAIN, TEAMC, clampPt, pickTarget } from './sim.js';
 
 const W2 = (x) => x * K;
@@ -111,14 +112,14 @@ export class Renderer {
     let v = this.views.get(u.id); if (v) return v;
     const tc = TEAMC[u.team]; let root;
     if (u.kind === 'hero') {
-      const R = buildHero(u.hd.id, tc); R.g.scale.multiplyScalar(1.3);
+      const R = buildHero(u.hd.id, tc);
       const ring = decal(RING_G, u.isPlayer ? 0xffd166 : tc, .9, true); ring.scale.setScalar(.62); ring.position.y = .03;
       const disc = this.blob(.5);
       root = new THREE.Group(); root.add(R.g, ring, disc);
       const bubble = new THREE.Mesh(new THREE.SphereGeometry(.85, 16, 12), new THREE.MeshBasicMaterial({ color: 0xe0f2fe, transparent: true, opacity: .14, blending: THREE.AdditiveBlending, depthWrite: false })); bubble.position.y = .8; bubble.visible = false; root.add(bubble);
       const spin = decal(new THREE.RingGeometry(.5, 1, 32, 1, 0, 1.4), 0xffffff, .5, true); spin.geometry.rotateX(-Math.PI / 2); spin.position.y = .3; spin.visible = false; root.add(spin);
       const spin2 = spin.clone(); spin2.rotation.y = Math.PI; spin.add(spin2);
-      const stars = new THREE.Group(); for (let i = 0; i < 3; i++) { const s = glowSprite(0xfde68a, .28, 1); s.position.set(Math.cos(i * 2.1) * .35, 0, Math.sin(i * 2.1) * .35); stars.add(s); } stars.position.y = 1.9; stars.visible = false; root.add(stars);
+      const stars = new THREE.Group(); for (let i = 0; i < 3; i++) { const s = glowSprite(0xfde68a, .28, 1); s.position.set(Math.cos(i * 2.1) * .35, 0, Math.sin(i * 2.1) * .35); stars.add(s); } stars.position.y = 2.2; stars.visible = false; root.add(stars);
       const roots = decal(RING_G, 0x86efac, .9, true); roots.scale.setScalar(.6); roots.position.y = .06; roots.visible = false; root.add(roots);
       v = { kind: 'hero', root, R, ring, bubble, spin, stars, roots, phase: 0, dieT: 0 };
     } else if (u.kind === 'minion') {
@@ -161,31 +162,21 @@ export class Renderer {
     for (const [id, v] of this.views) if (!seen.has(id)) { this.scene.remove(v.root); this.views.delete(id); }
   }
   animHero(v, u, dt, t) {
-    const R = v.R, sp = Math.hypot(u.vx, u.vy), moving = sp > 40 && !u.dash;
+    const R = v.R, sp = Math.hypot(u.vx, u.vy);
     if (u.face !== undefined) R.g.rotation.y = lerpAng(R.g.rotation.y, -u.face, dt * 14);
-    v.phase += (moving ? sp * dt * .028 : 0);
-    const sw = moving ? Math.sin(v.phase) : 0;
-    R.legL.rotation.z = sw * .7; R.legR.rotation.z = -sw * .7;
-    R.body.position.y = moving ? Math.abs(Math.cos(v.phase)) * .06 : Math.sin(t * 2 + u.id) * .015;
-    R.cape.rotation.z = -.1 - (moving ? .35 + Math.sin(v.phase * 2) * .08 : Math.sin(t * 1.5) * .04);
-    let aR = -sw * .5, aL = sw * .5;
-    const at = t - u.atkT, ct = t - u.castT;
-    if (at < .35) { const k = at / .35; aR = k < .35 ? (k / .35) * 2.4 : 2.4 - ((k - .35) / .65) * 2.0; if (u.hd.role === 'adc') { aL = 1.5; aR = k < .5 ? 1.6 : 1.0; } }
-    if (ct < .45) { const k = ct / .45; const up = Math.sin(k * Math.PI); aR = Math.max(aR, up * 2.6); aL = Math.max(aL, up * (u.hd.role === 'mage' || u.hd.role === 'support' ? 2.2 : 1.2)); }
-    R.armR.rotation.z = aR; R.armL.rotation.z = aL;
-    if (u.dash && !u.dash.forced) { R.body.rotation.z = -.35; } else R.body.rotation.z *= .8;
-    // 공중에 뜸
+    const atkDur = Math.min(.55, Math.max(.3, .75 / u.as)), at = t - u.atkT, ct = t - u.castT;
+    R.animate(dt, { t, speed: sp, moving: sp > 40 && !u.dash, atk: at >= 0 && at < atkDur ? at / atkDur : -1, cast: ct >= 0 && ct < .5 ? ct / .5 : -1,
+      dash: !!(u.dash && !u.dash.forced), stun: u.cc.stun > 0 && !u.airT, air: u.airT > 0 });
+    // 공중에 뜸 / 끌려감
     R.g.position.y = u.airT > 0 ? Math.sin((1 - u.airT / .75) * Math.PI) * .7 : (u.dash && u.dash.forced ? .2 : 0);
-    if (R.halo) R.halo.rotation.z += dt * 2;
-    if (R.orb) R.orb.rotation.y += dt * 2;
     // 상태 표시
     const spin = u.buffs.find(b => b.type === 'spin');
     v.spin.visible = !!spin; if (spin) { v.spin.rotation.y += dt * 16; v.spin.scale.setScalar(spin.r * K); v.spin.material.color.set(spin.col); R.g.rotation.y += dt * 22; }
     v.bubble.visible = u.shields.length > 0; if (v.bubble.visible) v.bubble.material.opacity = .12 + Math.sin(t * 6) * .04;
     v.stars.visible = u.cc.stun > 0 && !u.airT; if (v.stars.visible) v.stars.rotation.y += dt * 5;
     v.roots.visible = u.cc.root > 0; if (v.roots.visible) v.roots.scale.setScalar(.55 + Math.sin(t * 10) * .03);
-    const hurt = t - (u.hurtT || -9), slowed = u.cc.slows.length > 0;
-    const e = hurt < .07 ? .22 : 0; for (const m of R.mats) { m.emissive.setRGB(e + (slowed ? 0 : 0), e + (slowed ? .03 : 0), e + (slowed ? .12 : 0)); }
+    const hurt = t - (u.hurtT || -9), slowed = u.cc.slows.length > 0, e = hurt < .08 ? .35 : 0;
+    for (const m of R.mats) m.emissive.setRGB(e, e + (slowed ? .04 : 0), e + (slowed ? .16 : 0));
     v.ring.material.opacity = .75 + Math.sin(t * 3) * .15;
   }
 

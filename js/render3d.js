@@ -1,0 +1,381 @@
+// Three.js 3D 렌더러
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { K, glowTex, glowSprite, mat, emis, buildHero, buildMinion, buildTower, buildNexus } from './models.js';
+import { MAP_W, LANE_Y1, LANE_Y2, MID_Y, FOUNTAIN, TEAMC, clampPt, pickTarget } from './sim.js';
+
+const W2 = (x) => x * K;
+const UP = new THREE.Vector3(0, 1, 0);
+
+function seeded(s) { return () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; }; }
+
+function stoneTexture() {
+  const c = document.createElement('canvas'); c.width = 1024; c.height = 512; const g = c.getContext('2d');
+  const R = seeded(7);
+  g.fillStyle = '#4c5a70'; g.fillRect(0, 0, 1024, 512);
+  const bw = 128, bh = 85;
+  for (let row = 0; row < 7; row++) for (let col = -1; col < 9; col++) {
+    const x = col * bw + (row % 2 ? bw / 2 : 0), y = row * bh;
+    const l = 30 + R() * 14; g.fillStyle = `hsl(215,${12 + R() * 8}%,${l}%)`; g.fillRect(x + 3, y + 3, bw - 6, bh - 6);
+    g.fillStyle = 'rgba(255,255,255,.05)'; g.fillRect(x + 3, y + 3, bw - 6, 6);
+    for (let k = 0; k < 14; k++) { g.fillStyle = `rgba(0,0,0,${R() * .12})`; g.fillRect(x + R() * bw, y + R() * bh, 4 + R() * 12, 2 + R() * 5); }
+  }
+  // 눈 쌓인 자국
+  for (let i = 0; i < 22; i++) { const x = R() * 1024, y = R() * 512, r = 14 + R() * 40; const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, 'rgba(235,243,252,.32)'); gr.addColorStop(1, 'rgba(235,243,252,0)'); g.fillStyle = gr; g.beginPath(); g.ellipse(x, y, r * 1.6, r, 0, 0, 7); g.fill(); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping; t.anisotropy = 8; return t;
+}
+function mistTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'); const R = seeded(3);
+  for (let i = 0; i < 40; i++) { const x = R() * 256, y = R() * 256, r = 20 + R() * 60; const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, 'rgba(255,255,255,.35)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 256, 256); }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
+}
+
+/* ---------- 파티클 ---------- */
+class Particles {
+  constructor(scene, n = 500) {
+    this.pool = []; this.live = [];
+    for (let i = 0; i < n; i++) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })); s.visible = false; scene.add(s); this.pool.push(s); }
+  }
+  emit(x, y, z, o) {
+    const s = this.pool.pop(); if (!s) return;
+    s.visible = true; s.position.set(x, y, z); s.material.color.set(o.c || 0xffffff); s.material.opacity = o.a ?? 1; s.material.rotation = Math.random() * 6;
+    const p = { s, vx: o.vx || 0, vy: o.vy || 0, vz: o.vz || 0, g: o.g ?? 0, life: o.life || .6, t: 0, size: o.size || .3, grow: o.grow ?? 0, a: o.a ?? 1, drag: o.drag ?? 1 };
+    s.scale.set(p.size, p.size, 1); this.live.push(p);
+  }
+  burst(x, y, z, n, o) { for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, sp = (o.speed || 3) * (.4 + Math.random() * .6), up = o.up ?? 2; this.emit(x, y, z, { ...o, vx: Math.cos(a) * sp, vz: Math.sin(a) * sp, vy: up * (.3 + Math.random()), size: (o.size || .3) * (.6 + Math.random() * .8) }); } }
+  update(dt) {
+    for (let i = this.live.length - 1; i >= 0; i--) {
+      const p = this.live[i]; p.t += dt; const k = p.t / p.life;
+      if (k >= 1) { p.s.visible = false; this.pool.push(p.s); this.live.splice(i, 1); continue; }
+      p.vy -= p.g * dt; const dr = Math.pow(p.drag, dt * 60); p.vx *= dr; p.vz *= dr; p.vy *= dr;
+      p.s.position.x += p.vx * dt; p.s.position.y += p.vy * dt; p.s.position.z += p.vz * dt;
+      if (p.s.position.y < .03) { p.s.position.y = .03; p.vy = 0; }
+      const sz = p.size * (1 + p.grow * k); p.s.scale.set(sz, sz, 1); p.s.material.opacity = p.a * (1 - k) * (k < .1 ? k * 10 : 1);
+    }
+  }
+}
+
+/* ---------- 바닥 표시 ---------- */
+const RING_G = new THREE.RingGeometry(.9, 1, 64); RING_G.rotateX(-Math.PI / 2);
+const DISC_G = new THREE.CircleGeometry(1, 48); DISC_G.rotateX(-Math.PI / 2);
+const PLANE_G = new THREE.PlaneGeometry(1, 1); PLANE_G.rotateX(-Math.PI / 2); PLANE_G.translate(.5, 0, 0);
+function decal(geo, color, opacity, add = false) { const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, blending: add ? THREE.AdditiveBlending : THREE.NormalBlending, side: THREE.DoubleSide })); m.renderOrder = 2; return m; }
+
+export class Renderer {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.r = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+    this.r.toneMapping = THREE.ACESFilmicToneMapping; this.r.toneMappingExposure = .95;
+    this.r.outputColorSpace = THREE.SRGBColorSpace;
+    this.r.shadowMap.enabled = true; this.r.shadowMap.type = THREE.PCFShadowMap;
+    this.scene = new THREE.Scene(); this.scene.background = new THREE.Color(0x060d1a); this.scene.fog = new THREE.FogExp2(0x0a1628, .028);
+    this.cam = new THREE.PerspectiveCamera(38, 1, .5, 200);
+    this.ray = new THREE.Raycaster(); this.groundPlane = new THREE.Plane(UP, 0);
+    this.quality = 'high'; this.shake = 0; this.camT = new THREE.Vector3(30, 0, 7);
+    this.buildWorld();
+    this.parts = new Particles(this.scene);
+    this.views = new Map(); this.pviews = new Map(); this.zviews = new Map(); this.fxl = [];
+    this.composer = new EffectComposer(this.r);
+    this.composer.addPass(new RenderPass(this.scene, this.cam));
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), .55, .45, .9); this.composer.addPass(this.bloom);
+    this.composer.addPass(new OutputPass());
+    this.aim = this.buildAim();
+    this.clickRing = decal(RING_G, 0x4ade80, 0); this.scene.add(this.clickRing); this.clickT = 9;
+    this.towerRange = decal(RING_G, 0xff5a5a, 0); this.scene.add(this.towerRange);
+    this.resize();
+  }
+  setQuality(q) { this.quality = q; this.r.shadowMap.enabled = q === 'high'; this.moon.castShadow = q === 'high'; this.resize(); this.scene.traverse(o => { if (o.material) o.material.needsUpdate = true; }); }
+  resize() {
+    const w = window.innerWidth, h = window.innerHeight, pr = Math.min(window.devicePixelRatio || 1, this.quality === 'high' ? 2 : 1);
+    this.r.setPixelRatio(pr); this.r.setSize(w, h, false); this.composer.setPixelRatio(pr); this.composer.setSize(w, h);
+    this.cam.aspect = w / h; this.cam.updateProjectionMatrix(); this.W = w; this.H = h;
+  }
+
+  /* ---------- 월드 ---------- */
+  buildWorld() {
+    const S = this.scene, R = seeded(11), L = MAP_W * K, z0 = LANE_Y1 * K, z1 = LANE_Y2 * K, zm = MID_Y * K, bw = z1 - z0;
+    S.add(new THREE.HemisphereLight(0x9dbcf0, 0x0c1424, .75));
+    const moon = new THREE.DirectionalLight(0xdbe6ff, 2.0); moon.position.set(8, 18, 10); moon.castShadow = true;
+    moon.shadow.mapSize.set(2048, 2048); const sc = moon.shadow.camera; sc.left = -17; sc.right = 17; sc.top = 13; sc.bottom = -13; sc.near = 1; sc.far = 60; moon.shadow.bias = -.0005; moon.shadow.normalBias = .03;
+    S.add(moon); S.add(moon.target); this.moon = moon;
+    // 다리
+    const tex = stoneTexture(); tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(L / 6, 3);
+    const top = new THREE.MeshStandardMaterial({ map: tex, roughness: .85, metalness: .02 }), side = mat(0x3a4559);
+    const bridge = new THREE.Mesh(new THREE.BoxGeometry(L + 2, .8, bw + .4), [side, side, top, side, side, side]); bridge.position.set(L / 2, -.4, zm); bridge.receiveShadow = true; S.add(bridge);
+    // 기지 원형 광장
+    for (const t of [0, 1]) {
+      const fx = FOUNTAIN[t].x * K, tc = new THREE.Color(TEAMC[t]);
+      const plat = new THREE.Mesh(new THREE.CylinderGeometry(6.2, 6.6, .8, 10), [side, top, side]); plat.position.set(t ? L - 1.2 : 1.2, -.41, zm); plat.receiveShadow = true; S.add(plat);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(1.75, .12, 6, 40), emis(tc.getHex(), 1.2)); ring.rotation.x = Math.PI / 2; ring.position.set(fx, .05, zm); S.add(ring);
+      const pool = new THREE.Mesh(new THREE.CircleGeometry(1.65, 40), new THREE.MeshStandardMaterial({ color: tc.clone().multiplyScalar(.4), emissive: tc, emissiveIntensity: .35, roughness: .1, metalness: .3 })); pool.rotation.x = -Math.PI / 2; pool.position.set(fx, .02, zm); S.add(pool);
+      const beam = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.6, 9, 24, 1, true), new THREE.MeshBasicMaterial({ color: tc, transparent: true, opacity: .05, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide })); beam.position.set(fx, 4.5, zm); S.add(beam);
+      const pl = new THREE.PointLight(tc, 14, 12, 1.4); pl.position.set(fx, 2, zm); S.add(pl);
+      const base = new THREE.Mesh(new THREE.CircleGeometry(9, 40), new THREE.MeshBasicMaterial({ color: tc, transparent: true, opacity: .07, depthWrite: false })); base.rotation.x = -Math.PI / 2; base.position.set(fx + (t ? -2.5 : 2.5), .015, zm); S.add(base);
+    }
+    // 난간 + 등불
+    const railM = mat(0x5f6d84), lampM = emis(0xffc27a, 3.2);
+    for (const z of [z0 - .05, z1 + .05]) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(L - 12, .35, .28), railM); rail.position.set(L / 2, .17, z); rail.castShadow = true; rail.receiveShadow = true; S.add(rail);
+      for (let x = 7; x < L - 6; x += 3.5) {
+        const p = new THREE.Mesh(new THREE.BoxGeometry(.34, .9, .34), railM); p.position.set(x, .45, z); p.castShadow = true; S.add(p);
+        const cap = new THREE.Mesh(new THREE.ConeGeometry(.3, .25, 4), railM); cap.position.set(x, 1.2, z); cap.rotation.y = Math.PI / 4; S.add(cap);
+        const lamp = new THREE.Mesh(new THREE.SphereGeometry(.1, 6, 5), lampM); lamp.position.set(x, 1.0, z); S.add(lamp);
+        const gl = glowSprite(0xffb066, 1.1, .55); gl.position.set(x, 1.0, z); S.add(gl);
+      }
+    }
+    // 다리 아래 기둥 (심연)
+    const pM = mat(0x2d3748);
+    for (let x = 4; x < L; x += 7) { const p = new THREE.Mesh(new THREE.BoxGeometry(1.8, 34, bw - 1.5), pM); p.position.set(x, -17.8, zm); S.add(p); const arch = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.6, bw - 1.5, 10, 1, false, 0, Math.PI), pM); arch.rotation.x = Math.PI / 2; arch.rotation.z = Math.PI; arch.position.set(x + 3.5, -3.5, zm); S.add(arch); }
+    // 안개 (심연)
+    const mt = mistTexture(); this.mists = [];
+    for (const [y, op, sp] of [[-3.5, .32, .006], [-7, .25, -.004], [-12, .2, .003]]) { const t = mt.clone(); t.needsUpdate = true; t.repeat.set(8, 3); const m = new THREE.Mesh(new THREE.PlaneGeometry(L + 80, 70), new THREE.MeshBasicMaterial({ map: t, color: 0x6aa7ff, transparent: true, opacity: op, depthWrite: false, blending: THREE.AdditiveBlending })); m.rotation.x = -Math.PI / 2; m.position.set(L / 2, y, zm); S.add(m); this.mists.push({ t, sp }); }
+    // 양옆 설산과 얼음 결정
+    const rockM = mat(0xcad8ea, { roughness: .9 }), rockD = mat(0x5a6b85, { roughness: .9 }), iceM = emis(0x66ccff, 1.6, { transparent: true, opacity: .85 });
+    for (let i = 0; i < 70; i++) {
+      const far = i % 2 === 0, z = far ? z0 - 5 - R() * 14 : z1 + 9 + R() * 14, x = -15 + R() * (L + 30), s = 1.5 + R() * 4;
+      const r = new THREE.Mesh(new THREE.IcosahedronGeometry(s, 0), R() < .65 ? rockM : rockD); r.position.set(x, far ? -s * .9 + R() * 2 - 1.5 : -s - 4 - R() * 3, z); r.scale.y = .7 + R() * .9; r.rotation.set(R() * 3, R() * 3, R() * 3); S.add(r);
+      if (R() < .4) { const c = new THREE.Mesh(new THREE.OctahedronGeometry(.4 + R() * .8, 0), iceM); c.position.set(x + (R() - .5) * s, r.position.y + s * .9, z + (R() - .5) * 2); c.scale.y = 2.2; c.rotation.z = (R() - .5) * .6; S.add(c); }
+    }
+    // 먼 산 실루엣
+    const farM = new THREE.MeshBasicMaterial({ color: 0x14243c, fog: true });
+    for (let i = 0; i < 26; i++) { const s = 10 + R() * 14; const m = new THREE.Mesh(new THREE.ConeGeometry(s, s * 1.6, 5), farM); m.position.set(-30 + i * 5 + R() * 4, s * .3 - 10, i % 2 ? -45 - R() * 10 : 60 + R() * 10); S.add(m); }
+    // 회복 구슬
+    this.relicMeshes = [];
+    // 눈
+    const N = 1800, pos = new Float32Array(N * 3); for (let i = 0; i < N; i++) { pos[i * 3] = (R() - .5) * 40; pos[i * 3 + 1] = R() * 9; pos[i * 3 + 2] = (R() - .5) * 30; }
+    const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    this.snow = new THREE.Points(sg, new THREE.PointsMaterial({ map: glowTex(), size: .07, transparent: true, opacity: .75, depthWrite: false, color: 0xe6f0ff })); // 눈은 2D 오버레이에서 그림 (선명하고 가벼움)
+  }
+  buildAim() {
+    const g = new THREE.Group(); g.visible = false; this.scene.add(g);
+    const range = decal(RING_G, 0xffffff, .35); const line = decal(PLANE_G, 0xffffff, .18); const circ = decal(DISC_G, 0xffffff, .2); const circR = decal(RING_G, 0xffffff, .6);
+    const coneG = new THREE.CircleGeometry(1, 24, -.38, .76); coneG.rotateX(-Math.PI / 2); const cone = decal(coneG, 0xffffff, .18);
+    const tgt = decal(RING_G, 0xfde047, .9);
+    g.add(range, line, circ, circR, cone, tgt); [range, line, circ, circR, cone, tgt].forEach(m => m.position.y = .04);
+    return { g, range, line, circ, circR, cone, tgt };
+  }
+
+  /* ---------- 좌표 ---------- */
+  pick(sx, sy) {
+    const v = new THREE.Vector2((sx / this.W) * 2 - 1, -(sy / this.H) * 2 + 1); this.ray.setFromCamera(v, this.cam);
+    const p = new THREE.Vector3(); if (!this.ray.ray.intersectPlane(this.groundPlane, p)) return { x: 0, y: 0 };
+    return { x: p.x / K, y: p.z / K };
+  }
+  project(x, y, h) { const v = new THREE.Vector3(x * K, h, y * K).project(this.cam); return { x: (v.x + 1) / 2 * this.W, y: (1 - v.y) / 2 * this.H, vis: v.z < 1 }; }
+
+  /* ---------- 유닛 뷰 ---------- */
+  viewFor(u) {
+    let v = this.views.get(u.id); if (v) return v;
+    const tc = TEAMC[u.team]; let root;
+    if (u.kind === 'hero') {
+      const R = buildHero(u.hd.id, tc); R.g.scale.multiplyScalar(1.3);
+      const ring = decal(RING_G, u.isPlayer ? 0xffd166 : tc, .9, true); ring.scale.setScalar(.62); ring.position.y = .03;
+      const disc = decal(DISC_G, tc, .18); disc.scale.setScalar(.5); disc.position.y = .025;
+      root = new THREE.Group(); root.add(R.g, ring, disc);
+      const bubble = new THREE.Mesh(new THREE.SphereGeometry(.85, 16, 12), new THREE.MeshBasicMaterial({ color: 0xe0f2fe, transparent: true, opacity: .14, blending: THREE.AdditiveBlending, depthWrite: false })); bubble.position.y = .8; bubble.visible = false; root.add(bubble);
+      const spin = decal(new THREE.RingGeometry(.5, 1, 32, 1, 0, 1.4), 0xffffff, .5, true); spin.geometry.rotateX(-Math.PI / 2); spin.position.y = .3; spin.visible = false; root.add(spin);
+      const spin2 = spin.clone(); spin2.rotation.y = Math.PI; spin.add(spin2);
+      const stars = new THREE.Group(); for (let i = 0; i < 3; i++) { const s = glowSprite(0xfde68a, .28, 1); s.position.set(Math.cos(i * 2.1) * .35, 0, Math.sin(i * 2.1) * .35); stars.add(s); } stars.position.y = 1.9; stars.visible = false; root.add(stars);
+      const roots = decal(RING_G, 0x86efac, .9, true); roots.scale.setScalar(.6); roots.position.y = .06; roots.visible = false; root.add(roots);
+      v = { kind: 'hero', root, R, ring, bubble, spin, stars, roots, phase: 0, dieT: 0 };
+    } else if (u.kind === 'minion') {
+      const R = buildMinion(u.mk, u.team, tc); R.g.scale.setScalar(1.2); root = new THREE.Group(); root.add(R.g);
+      v = { kind: 'minion', root, R, phase: Math.random() * 6 };
+    } else {
+      const R = u.kind === 'tower' ? buildTower(u.team, tc) : buildNexus(u.team, tc); root = R.g;
+      v = { kind: u.kind, root, R, wasDead: false };
+    }
+    root.position.set(u.x * K, 0, u.y * K); this.scene.add(root); this.views.set(u.id, v); return v;
+  }
+  syncUnits(G, dt) {
+    const seen = new Set(), t = G.t;
+    for (const u of G.units) {
+      seen.add(u.id); const v = this.viewFor(u);
+      const p = v.root.position;
+      if (v.kind === 'hero') {
+        if (u.dead) {
+          v.dieT += dt; const k = Math.min(1, v.dieT / .6);
+          v.R.g.rotation.z = -k * 1.45; v.R.g.position.y = -k * .15; v.root.visible = v.dieT < 2.5; v.ring.visible = false; continue;
+        }
+        if (v.dieT > 0 || !v.root.visible) { v.dieT = 0; v.R.g.rotation.z = 0; v.R.g.position.y = 0; v.root.visible = true; v.ring.visible = true; p.set(u.x * K, 0, u.y * K); }
+        const tx = u.x * K, tz = u.y * K; const jump = Math.hypot(tx - p.x, tz - p.z) > 1.5;
+        if (jump) p.set(tx, 0, tz); else { p.x += (tx - p.x) * Math.min(1, dt * 25); p.z += (tz - p.z) * Math.min(1, dt * 25); }
+        this.animHero(v, u, dt, t);
+      } else if (v.kind === 'minion') {
+        p.set(u.x * K, 0, u.y * K);
+        const sp = Math.hypot(u.vx, u.vy); v.phase += sp * dt * .05;
+        if (u.face !== undefined) v.R.g.rotation.y = lerpAng(v.R.g.rotation.y, -u.face, dt * 10);
+        v.R.body.position.y = Math.abs(Math.sin(v.phase)) * .04 * (sp > 20 ? 1 : 0);
+        if (v.R.legL) { v.R.legL.rotation.z = Math.sin(v.phase) * .5 * (sp > 20 ? 1 : 0); v.R.legR.rotation.z = -v.R.legL.rotation.z; }
+        const at = t - u.atkT; if (v.R.armR) v.R.armR.rotation.z = at < .3 ? Math.sin(at / .3 * Math.PI) * 1.6 : 0;
+        if (v.R.orb) v.R.orb.position.y = .6 + Math.sin(t * 4 + u.id) * .05;
+        const hurt = t - (u.hurtT || -9); v.R.g.scale.setScalar(hurt < .12 ? 1.08 : 1);
+      } else {
+        if (u.dead && !v.wasDead) { v.wasDead = true; v.R.alive.forEach(o => o.visible = false); v.R.rubble.visible = true; }
+        if (!u.dead) { v.R.crystal.rotation.y += dt * (v.kind === 'nexus' ? .6 : 1.2); v.R.crystal.position.y = (v.kind === 'nexus' ? 2.1 : 3.6) + Math.sin(t * 2 + u.id) * .08; const hurt = t - (u.hurtT || -9); v.R.light.intensity = (v.kind === 'nexus' ? 10 : 6) * (hurt < .15 ? 1.8 : 1); }
+      }
+    }
+    for (const [id, v] of this.views) if (!seen.has(id)) { this.scene.remove(v.root); this.views.delete(id); }
+  }
+  animHero(v, u, dt, t) {
+    const R = v.R, sp = Math.hypot(u.vx, u.vy), moving = sp > 40 && !u.dash;
+    if (u.face !== undefined) R.g.rotation.y = lerpAng(R.g.rotation.y, -u.face, dt * 14);
+    v.phase += (moving ? sp * dt * .028 : 0);
+    const sw = moving ? Math.sin(v.phase) : 0;
+    R.legL.rotation.z = sw * .7; R.legR.rotation.z = -sw * .7;
+    R.body.position.y = moving ? Math.abs(Math.cos(v.phase)) * .06 : Math.sin(t * 2 + u.id) * .015;
+    R.cape.rotation.z = -.1 - (moving ? .35 + Math.sin(v.phase * 2) * .08 : Math.sin(t * 1.5) * .04);
+    let aR = -sw * .5, aL = sw * .5;
+    const at = t - u.atkT, ct = t - u.castT;
+    if (at < .35) { const k = at / .35; aR = k < .35 ? (k / .35) * 2.4 : 2.4 - ((k - .35) / .65) * 2.0; if (u.hd.role === 'adc') { aL = 1.5; aR = k < .5 ? 1.6 : 1.0; } }
+    if (ct < .45) { const k = ct / .45; const up = Math.sin(k * Math.PI); aR = Math.max(aR, up * 2.6); aL = Math.max(aL, up * (u.hd.role === 'mage' || u.hd.role === 'support' ? 2.2 : 1.2)); }
+    R.armR.rotation.z = aR; R.armL.rotation.z = aL;
+    if (u.dash && !u.dash.forced) { R.body.rotation.z = -.35; } else R.body.rotation.z *= .8;
+    // 공중에 뜸
+    R.g.position.y = u.airT > 0 ? Math.sin((1 - u.airT / .75) * Math.PI) * .7 : (u.dash && u.dash.forced ? .2 : 0);
+    if (R.halo) R.halo.rotation.z += dt * 2;
+    if (R.orb) R.orb.rotation.y += dt * 2;
+    // 상태 표시
+    const spin = u.buffs.find(b => b.type === 'spin');
+    v.spin.visible = !!spin; if (spin) { v.spin.rotation.y += dt * 16; v.spin.scale.setScalar(spin.r * K); v.spin.material.color.set(spin.col); R.g.rotation.y += dt * 22; }
+    v.bubble.visible = u.shields.length > 0; if (v.bubble.visible) v.bubble.material.opacity = .12 + Math.sin(t * 6) * .04;
+    v.stars.visible = u.cc.stun > 0 && !u.airT; if (v.stars.visible) v.stars.rotation.y += dt * 5;
+    v.roots.visible = u.cc.root > 0; if (v.roots.visible) v.roots.scale.setScalar(.55 + Math.sin(t * 10) * .03);
+    const hurt = t - (u.hurtT || -9), slowed = u.cc.slows.length > 0;
+    const e = hurt < .07 ? .22 : 0; for (const m of R.mats) { m.emissive.setRGB(e + (slowed ? 0 : 0), e + (slowed ? .03 : 0), e + (slowed ? .12 : 0)); }
+    v.ring.material.opacity = .75 + Math.sin(t * 3) * .15;
+  }
+
+  /* ---------- 투사체 ---------- */
+  syncProjs(G, dt) {
+    const seen = new Set();
+    for (const p of G.projs) {
+      seen.add(p.id); let v = this.pviews.get(p.id);
+      if (!v) v = this.makeProj(p);
+      const h = p.homing ? (p.kind === 'tower' ? lerp(p.z0 * K, .7, clampN(1 - Math.hypot(p.tgt.x - p.x, p.tgt.y - p.y) / 750)) : .75) : (p.kind === 'big' ? .9 : .75);
+      v.o.position.set(p.x * K, h, p.y * K);
+      if (p.dx !== undefined) v.o.rotation.y = -Math.atan2(p.dy, p.dx);
+      if (v.line) { const o = p.owner; v.line.geometry.setFromPoints([new THREE.Vector3(o.x * K, .9, o.y * K), v.o.position.clone()]); }
+      v.trailT -= dt; if (v.trailT <= 0) { v.trailT = p.kind === 'big' ? .015 : .03; this.parts.emit(v.o.position.x, h, v.o.position.z, { c: p.color, size: p.kind === 'big' ? 1.2 : p.kind === 'tower' ? .7 : .35, life: p.kind === 'big' ? .5 : .3, a: .7 }); }
+    }
+    for (const [id, v] of this.pviews) if (!seen.has(id)) { this.scene.remove(v.o); if (v.line) this.scene.remove(v.line); this.pviews.delete(id); }
+  }
+  makeProj(p) {
+    const o = new THREE.Group(); let line = null; const c = p.color;
+    if (p.kind === 'arrow') { const m = new THREE.Mesh(new THREE.ConeGeometry(.05, .5, 5), emis(new THREE.Color(c).getHex(), 2.5)); m.rotation.z = -Math.PI / 2; o.add(m); o.add(glowSprite(c, .6, .8)); }
+    else if (p.kind === 'big') { const m = new THREE.Mesh(new THREE.ConeGeometry(.35, 2.2, 6), emis(0xa3e635, 3)); m.rotation.z = -Math.PI / 2; o.add(m); o.add(glowSprite(c, 3, .9)); }
+    else if (p.kind === 'chain') { const m = new THREE.Mesh(new THREE.OctahedronGeometry(.18, 0), mat(0xcbd5e1, { metalness: .9, roughness: .2 })); o.add(m); o.add(glowSprite(0x93c5fd, .8, .5)); line = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xcbd5e1 })); this.scene.add(line); }
+    else if (p.kind === 'snow') { o.add(new THREE.Mesh(new THREE.SphereGeometry(.28, 10, 8), mat(0xf8fafc, { roughness: .9 }))); o.add(glowSprite(0xbfdbfe, 1, .5)); }
+    else if (p.kind === 'tower') { o.add(new THREE.Mesh(new THREE.SphereGeometry(.2, 10, 8), emis(new THREE.Color(c).getHex(), 4))); o.add(glowSprite(c, 1.6, 1)); }
+    else if (p.kind === 'orb') { o.add(new THREE.Mesh(new THREE.SphereGeometry(.26, 12, 10), emis(new THREE.Color(c).getHex(), 4))); o.add(glowSprite(c, 1.8, .9)); }
+    else { o.add(new THREE.Mesh(new THREE.SphereGeometry(Math.max(.07, p.r * K * .8), 8, 6), emis(new THREE.Color(c).getHex(), 3))); o.add(glowSprite(c, Math.max(.5, p.r * K * 5), .9)); }
+    this.scene.add(o); const v = { o, line, trailT: 0 }; this.pviews.set(p.id, v); return v;
+  }
+  /* ---------- 예고 범위 ---------- */
+  syncZones(G) {
+    const seen = new Set();
+    for (const z of G.zones) {
+      seen.add(z.id); let v = this.zviews.get(z.id); const k = Math.min(1, z.t / z.delay);
+      if (!v) {
+        const g = new THREE.Group();
+        if (z.line) { const L = Math.hypot(z.x2 - z.x, z.y2 - z.y) * K; const a = decal(PLANE_G, z.color, .15, true); a.scale.set(L, 1, z.w * K); const b = decal(PLANE_G, z.color, .35, true); b.scale.set(L, 1, z.w * K); b.position.y = .01; g.add(a, b); g.rotation.y = -Math.atan2(z.y2 - z.y, z.x2 - z.x); v = { g, a, b, line: true, w: z.w * K, L }; }
+        else { const a = decal(DISC_G, z.color, .14, true), r = decal(RING_G, z.color, .8, true), b = decal(DISC_G, z.color, .3, true); [a, r].forEach(m => m.scale.setScalar(z.r * K)); b.position.y = .01; g.add(a, r, b); v = { g, a, r, b, R: z.r * K }; }
+        g.position.set(z.x * K, .05, z.y * K); this.scene.add(g); this.zviews.set(z.id, v);
+      }
+      if (v.line) v.b.scale.set(v.L, 1, v.w * k); else v.b.scale.setScalar(Math.max(.01, v.R * k));
+    }
+    for (const [id, v] of this.zviews) if (!seen.has(id)) { this.scene.remove(v.g); this.zviews.delete(id); }
+  }
+  /* ---------- 이펙트 ---------- */
+  spawnFx(f, G) {
+    const x = f.x * K, z = f.y * K, P = this.parts, c = f.c || '#ffffff';
+    const ring = (r, dur, op = .9, w = 1) => { const m = decal(RING_G, c, op, true); m.position.set(x, .06, z); this.scene.add(m); this.fxl.push({ m, t: 0, dur, r0: r * .3, r1: r, op, kind: 'ring' }); };
+    switch (f.type) {
+      case 'ring': ring(f.r * K, f.dur || .45); if (f.fill) P.burst(x, .3, z, 14, { c, speed: f.r * K * 3, up: 1.5, size: .4, life: .5, g: 3 }); break;
+      case 'burst': ring(f.r * K, .5); P.burst(x, .2, z, 26, { c, speed: f.r * K * 3, up: 4, size: .5, life: .7, g: 6 }); P.emit(x, .5, z, { c, size: f.r * K * 3, life: .3, a: .8 }); break;
+      case 'vines': ring(f.r * K, .6); for (let i = 0; i < 9; i++) { const a = i / 9 * 6.28, rr = f.r * K * (.3 + Math.random() * .6); const m = new THREE.Mesh(new THREE.ConeGeometry(.12, .9, 5), mat(0x4ade80, { emissive: 0x16a34a, emissiveIntensity: .8 })); m.position.set(x + Math.cos(a) * rr, -.5, z + Math.sin(a) * rr); m.rotation.set((Math.random() - .5) * .5, 0, (Math.random() - .5) * .5); this.scene.add(m); this.fxl.push({ m, t: 0, dur: 1.3, kind: 'spike' }); } P.burst(x, .2, z, 16, { c, speed: 2, up: 3, size: .3, life: .6, g: 4 }); break;
+      case 'beam': { const L = Math.hypot(f.x2 - f.x, f.y2 - f.y) * K; const g = new THREE.Group(); const core = new THREE.Mesh(new THREE.BoxGeometry(L, .25, f.w * K * .5), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })); core.position.x = L / 2; const outer = new THREE.Mesh(new THREE.BoxGeometry(L, .6, f.w * K * 1.2), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: .6, blending: THREE.AdditiveBlending, depthWrite: false })); outer.position.x = L / 2; g.add(core, outer); g.position.set(x, .8, z); g.rotation.y = -Math.atan2(f.y2 - f.y, f.x2 - f.x); this.scene.add(g); this.fxl.push({ m: g, t: 0, dur: f.dur || .6, kind: 'beam', mats: [core.material, outer.material] }); this.shake = Math.max(this.shake, .25); break; }
+      case 'blink': P.burst(x, .7, z, 18, { c, speed: 3, up: 1, size: .35, life: .45 }); break;
+      case 'hit': P.burst(x, .8, z, 5, { c, speed: 2.5, up: 1.5, size: .25, life: .25 }); break;
+      case 'slash': { const m = new THREE.Mesh(new THREE.TorusGeometry(.55, .05, 4, 16, 2.4), new THREE.MeshBasicMaterial({ color: c, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })); m.position.set(x, .85, z); m.rotation.set(Math.PI / 2 + (Math.random() - .5), 0, -(f.a || 0) - 1.2); this.scene.add(m); this.fxl.push({ m, t: 0, dur: .2, kind: 'fade', mats: [m.material] }); break; }
+      case 'quake': ring(f.r * K, .5); for (let i = 0; i < 14; i++) P.emit(x + (Math.random() - .5) * f.r * K * 1.6, .1, z + (Math.random() - .5) * f.r * K * 1.6, { c: '#94a3b8', vy: 3 + Math.random() * 3, g: 12, size: .35, life: .6, a: .8 }); this.shake = Math.max(this.shake, .2); break;
+      case 'nova': { const m = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: .35, blending: THREE.AdditiveBlending, depthWrite: false })); m.position.set(x, .2, z); this.scene.add(m); this.fxl.push({ m, t: 0, dur: .6, kind: 'nova', R: f.r * K, mats: [m.material] }); ring(f.r * K, .6); this.shake = Math.max(this.shake, .3); break; }
+      case 'bolt': { const pts = []; const n = 8; for (let i = 0; i <= n; i++) { const k = i / n; pts.push(new THREE.Vector3(lerp(f.x2, f.x, k) * K + (i && i < n ? (Math.random() - .5) * .4 : 0), lerp(3, .8, k), lerp(f.y2, f.y, k) * K + (i && i < n ? (Math.random() - .5) * .4 : 0))); } const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: c, transparent: true })); this.scene.add(l); this.fxl.push({ m: l, t: 0, dur: .3, kind: 'fade', mats: [l.material] }); P.burst(x, .8, z, 6, { c, speed: 2, size: .3, life: .3 }); break; }
+      case 'heal': for (let i = 0; i < 16; i++) P.emit(x + (Math.random() - .5) * .8, .2 + Math.random() * .5, z + (Math.random() - .5) * .8, { c, vy: 1.5 + Math.random() * 1.5, size: .25, life: .8, drag: .97 }); ring(.7, .5); break;
+      case 'aura': this.fxl.push({ t: 0, dur: f.dur || 2, kind: 'aura', follow: f.follow, c, acc: 0 }); break;
+      case 'levelup': { const m = new THREE.Mesh(new THREE.CylinderGeometry(.6, .6, 3, 20, 1, true), new THREE.MeshBasicMaterial({ color: 0xfde68a, transparent: true, opacity: .4, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide })); m.position.set(x, 1.5, z); this.scene.add(m); this.fxl.push({ m, t: 0, dur: .9, kind: 'column', follow: f.follow, mats: [m.material] }); break; }
+      case 'death': P.burst(x, .6, z, f.small ? 10 : 30, { c, speed: f.small ? 2 : 4, up: 3, size: f.small ? .3 : .5, life: .7, g: 5 }); break;
+      case 'collapse': P.burst(x, 1.5, z, f.big ? 120 : 60, { c, speed: f.big ? 8 : 5, up: 6, size: .6, life: 1.4, g: 6 }); for (let i = 0; i < 20; i++) P.emit(x + (Math.random() - .5) * 2, 2 + Math.random() * 2, z + (Math.random() - .5) * 2, { c: '#94a3b8', vx: (Math.random() - .5) * 4, vz: (Math.random() - .5) * 4, vy: 2 + Math.random() * 3, g: 10, size: .5, life: 1.2, a: .9 }); this.shake = Math.max(this.shake, f.big ? 1.2 : .6); break;
+      case 'sword': { const g = new THREE.Group(); const b = new THREE.Mesh(new THREE.BoxGeometry(.25, 3.2, .7), emis(0xfde047, 3, { transparent: true })); b.position.y = 1.6; g.add(b); g.add(glowSprite(0xfde047, 3, .8)); g.position.set(x, 6, z); this.scene.add(g); this.fxl.push({ m: g, t: 0, dur: .5, kind: 'drop', mats: [b.material] }); this.shake = Math.max(this.shake, .35); break; }
+      case 'blades': for (let i = 0; i < 16; i++) { const a = i / 16 * 6.28; P.emit(x, .7, z, { c, vx: Math.cos(a) * 5, vz: Math.sin(a) * 5, size: .35, life: .35, drag: .9 }); } ring(f.r * K, .35); break;
+    }
+  }
+  updateFx(G, dt) {
+    while (G.fxq.length) this.spawnFx(G.fxq.shift(), G);
+    for (let i = this.fxl.length - 1; i >= 0; i--) {
+      const f = this.fxl[i]; f.t += dt; const k = f.t / f.dur;
+      if (k >= 1) { if (f.m) this.scene.remove(f.m); this.fxl.splice(i, 1); continue; }
+      if (f.kind === 'ring') { const r = lerp(f.r0, f.r1, 1 - Math.pow(1 - k, 3)); f.m.scale.setScalar(Math.max(.01, r)); f.m.material.opacity = f.op * (1 - k); }
+      else if (f.kind === 'spike') { f.m.position.y = k < .25 ? lerp(-.5, .3, k / .25) : k > .75 ? lerp(.3, -.6, (k - .75) / .25) : .3; }
+      else if (f.kind === 'beam') { const s = 1 - k; f.m.scale.set(1, s, s); f.mats.forEach(m => m.opacity = s); }
+      else if (f.kind === 'fade') f.mats.forEach(m => m.opacity = 1 - k);
+      else if (f.kind === 'nova') { f.m.scale.setScalar(Math.max(.01, f.R * (1 - Math.pow(1 - k, 2)))); f.mats[0].opacity = .35 * (1 - k); }
+      else if (f.kind === 'column') { const u = G.units.find(q => q.id === f.follow); if (u) f.m.position.set(u.x * K, 1.5, u.y * K); f.m.scale.set(1 - k * .5, 1 + k, 1 - k * .5); f.mats[0].opacity = .4 * (1 - k); }
+      else if (f.kind === 'drop') { f.m.position.y = Math.max(0, 6 * (1 - k * 3)); f.mats[0].opacity = k > .6 ? (1 - k) / .4 : 1; }
+      else if (f.kind === 'aura') { const u = G.units.find(q => q.id === f.follow); if (!u || u.dead) { f.t = f.dur; continue; } f.acc += dt; while (f.acc > .06) { f.acc -= .06; const a = Math.random() * 6.28; this.parts.emit(u.x * K + Math.cos(a) * .45, .2, u.y * K + Math.sin(a) * .45, { c: f.c, vy: 1.6, size: .22, life: .5 }); } }
+    }
+    this.parts.update(dt);
+  }
+  /* ---------- 조준 표시 ---------- */
+  updateAim(G, p, aiming, mouse, ab) {
+    const A = this.aim; A.g.visible = aiming >= 0 && p && !p.dead; if (!A.g.visible) return;
+    const a = ab.ai, px = p.x * K, pz = p.y * K; A.g.position.set(px, 0, pz);
+    [A.range, A.line, A.circ, A.circR, A.cone, A.tgt].forEach(m => m.visible = false);
+    const ang = Math.atan2(mouse.y - p.y, mouse.x - p.x);
+    if (a.t === 'shot' || a.t === 'line' || a.t === 'global') {
+      const L = (a.t === 'global' ? 2400 : a.range) * K;
+      if (a.cone) { A.cone.visible = true; A.cone.scale.setScalar(L); A.cone.rotation.y = -ang; }
+      else { A.line.visible = true; A.line.scale.set(L, 1, a.w * K); A.line.rotation.y = -ang; }
+    } else if (a.t === 'aoe') { A.range.visible = true; A.range.scale.setScalar(a.range * K); const [x, y] = clampPt(p, mouse.x, mouse.y, a.range); A.circ.visible = A.circR.visible = true; A.circ.position.set((x - p.x) * K, .04, (y - p.y) * K); A.circR.position.copy(A.circ.position); A.circ.scale.setScalar(a.r * K); A.circR.scale.setScalar(a.r * K); }
+    else if (a.t === 'dash') { A.range.visible = true; A.range.scale.setScalar(a.range * K); const [x, y] = clampPt(p, mouse.x, mouse.y, a.range); A.circR.visible = true; A.circR.position.set((x - p.x) * K, .04, (y - p.y) * K); A.circR.scale.setScalar(.45); }
+    else if (a.t === 'target' || a.t === 'exec') { A.range.visible = true; A.range.scale.setScalar((a.range + p.r) * K); const t = pickTarget(p, mouse.x, mouse.y, a.range, a.t === 'exec'); if (t) { A.tgt.visible = true; A.tgt.position.set((t.x - p.x) * K, .05, (t.y - p.y) * K); A.tgt.scale.setScalar(.65); } }
+  }
+  reset() {
+    for (const v of this.views.values()) this.scene.remove(v.root); this.views.clear();
+    for (const v of this.pviews.values()) { this.scene.remove(v.o); if (v.line) this.scene.remove(v.line); } this.pviews.clear();
+    for (const v of this.zviews.values()) this.scene.remove(v.g); this.zviews.clear();
+    for (const f of this.fxl) if (f.m) this.scene.remove(f.m); this.fxl = [];
+  }
+  clickMarker(x, y, color) { this.clickRing.position.set(x * K, .05, y * K); this.clickRing.material.color.set(color); this.clickT = 0; }
+
+  /* ---------- 프레임 ---------- */
+  render(G, dt, opts) {
+    const p = G.player;
+    this.syncUnits(G, dt); this.syncProjs(G, dt); this.syncZones(G); this.updateFx(G, dt);
+    // 회복 구슬
+    while (this.relicMeshes.length < G.relics.length) { const g = new THREE.Group(); const m = new THREE.Mesh(new THREE.OctahedronGeometry(.22, 0), emis(0x4ade80, 1.2)); g.add(m); g.add(glowSprite(0x4ade80, 1.1, .5)); this.scene.add(g); this.relicMeshes.push(g); }
+    G.relics.forEach((r, i) => { const g = this.relicMeshes[i]; g.visible = r.on; g.position.set(r.x * K, .7 + Math.sin(G.t * 3 + i) * .12, r.y * K); g.children[0].rotation.y += dt * 2; });
+    // 포탑 사거리
+    let tw = null; if (p && !p.dead) for (const u of G.units) if (u.kind === 'tower' && !u.dead && u.team !== p.team && Math.hypot(u.x - p.x, u.y - p.y) < u.range + 450) tw = u;
+    this.towerRange.material.opacity = tw ? (tw.target === p ? .8 : .35) : 0; if (tw) { this.towerRange.position.set(tw.x * K, .05, tw.y * K); this.towerRange.scale.setScalar(tw.range * K); }
+    this.clickT += dt; this.clickRing.material.opacity = Math.max(0, .9 - this.clickT * 2.5); this.clickRing.scale.setScalar(Math.max(.05, .35 - this.clickT * .6));
+    this.updateAim(G, p, opts.aiming, opts.mouse, opts.aiming >= 0 ? p.hd.ab[opts.aiming] : null);
+    // 카메라
+    const fx = (p ? p.x + (opts.camOff || 0) : MAP_W / 2) * K;
+    const desired = new THREE.Vector3(Math.max(4, Math.min(MAP_W * K - 4, fx)), 0, MID_Y * K + ((p ? p.y : MID_Y) - MID_Y) * K * .35);
+    this.camT.lerp(desired, Math.min(1, dt * 8));
+    this.shake = Math.max(0, this.shake - dt * 1.5); const sh = this.shake * this.shake;
+    this.cam.position.set(this.camT.x + (Math.random() - .5) * sh, this.camT.y + 12.5 + (Math.random() - .5) * sh, this.camT.z + 8.2);
+    this.cam.lookAt(this.camT.x, 0, this.camT.z + .6);
+    this.moon.position.set(this.camT.x + 7, 18, this.camT.z + 9); this.moon.target.position.set(this.camT.x, 0, this.camT.z);
+    // 눈, 안개
+    for (const m of this.mists) m.t.offset.x += m.sp * dt;
+    if (this.quality === 'high') this.composer.render(dt); else this.r.render(this.scene, this.cam);
+  }
+}
+function lerp(a, b, k) { return a + (b - a) * k; }
+function clampN(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
+function lerpAng(a, b, k) { let d = b - a; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return a + d * Math.min(1, k); }

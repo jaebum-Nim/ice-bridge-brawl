@@ -1,17 +1,25 @@
 # 얼음 다리 난투 (Ice Bridge Brawl)
 
-브라우저에서 바로 실행되는 5대5 단일 라인 AI 대전 게임입니다. 칼바람 스타일의 모드에서 영감을 받았고, 영웅과 아이템은 모두 오리지널입니다.
+얼어붙은 협곡 위 다리 하나에서 싸우는 브라우저 3D 대전 게임입니다. 칼바람 스타일의 단일 라인 모드에서 영감을 받았고, 영웅과 아이템은 모두 오리지널입니다.
+
+- **AI와 1대1**: 내 영웅과 상대 영웅을 골라 결투
+- **5대5 AI 대전**: 아군 AI 4명과 함께 적 AI 5명과 대전
+- **온라인 1대1**: 다음 업데이트 예정
 
 ## 실행
 
-`index.html`을 브라우저로 열면 됩니다. 설치할 것은 없습니다.
-GitHub Pages를 켜면 링크로 바로 플레이할 수 있습니다 (Settings → Pages → Branch: `main`).
+ES 모듈을 쓰기 때문에 **웹 주소로 열어야** 합니다.
+
+- GitHub Pages: https://jaebum-nim.github.io/ice-bridge-brawl/ (Settings → Pages에서 `main` 브랜치를 켜면 동작)
+- 내 컴퓨터: 이 폴더에서 `python3 -m http.server` 실행 후 http://localhost:8000 접속
+
+예전 2D 버전은 `classic.html`을 더블클릭하면 바로 열립니다.
 
 ## 조작
 
 | 키 | 동작 |
 |---|---|
-| 우클릭 | 이동 / 공격 |
+| 우클릭 | 이동 / 공격 (누른 채 끌면 계속 이동) |
 | Q W E R | 스킬 (누르고 있으면 조준, 떼면 시전) |
 | D / F | 점멸 / 눈덩이 (맞춘 뒤 다시 F로 돌진) |
 | A + 좌클릭 | 공격 이동 |
@@ -32,14 +40,23 @@ GitHub Pages를 켜면 링크로 바로 플레이할 수 있습니다 (Settings 
 | 니야 | 암살자 | 대상 돌진(처치 시 초기화), 회전 칼날 |
 | 테라 | 서포터 | 치유, 속박 덩굴, 광역 회복 |
 
-## 테스트
-
-`node sim-test.js index.html 4` 명령은 화면 없이 AI끼리 4판을 끝까지 돌리고 결과(게임 시간, 킬, 남은 포탑)를 표로 보여줍니다.
-
 ## 구조
 
-게임 전체가 `index.html` 하나에 들어 있습니다.
-- 영웅/스킬 정의: `HEROES`
-- 아이템: `ITEMS`, AI 빌드: `BUILDS`
-- AI: `aiHero` / `aiDecide` / `aiAbilities`, `aiMinion`, `aiTower`
-- 렌더링: `render`, `drawHUD`
+| 파일 | 역할 |
+|---|---|
+| `js/sim.js` | 게임 규칙 전부 (영웅, 스킬, 아이템, AI, 전투). 화면과 분리되어 Node에서도 돌아감 |
+| `js/render3d.js` | Three.js 3D 렌더러 (맵, 조명, 그림자, 빛 번짐, 이펙트, 파티클) |
+| `js/models.js` | 코드로 만든 로우폴리 영웅·미니언·포탑·넥서스 모델 |
+| `js/hud.js` | 체력바, 피해 숫자, 하단 패널, 미니맵 등 2D 오버레이 |
+| `js/main.js` | 메뉴, 입력, 상점, 게임 루프 |
+| `vendor/three/` | Three.js r187 (MIT) |
+| `classic.html` | 예전 2D 버전 (파일 하나) |
+
+플레이어 조작은 모두 `cmd(hero, {c:'move'|'atk'|'cast'|...})` 명령으로 처리되므로, 온라인 대전에서도 같은 명령을 네트워크로 보내면 됩니다.
+
+## 테스트
+
+```
+node tools/sim-test.mjs 9 1v1   # AI끼리 9판을 끝까지 돌려 결과 표 출력
+node tools/sim-test.mjs 4 5v5
+```

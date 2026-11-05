@@ -16,7 +16,7 @@
 <div id="boot">불러오는 중…</div>
 <script>
   // 파일을 더블클릭해서 열면(file://) 브라우저 보안 정책 때문에 모듈을 못 불러옵니다.
-  if (location.protocol === 'file:') document.getElementById('boot').innerHTML = '이 게임은 웹 주소로 열어야 합니다.<br>GitHub Pages 링크로 접속하거나, 이 폴더에서 <code>python3 -m http.server</code> 실행 후<br><code>http://localhost:8000</code> 으로 접속하세요.<br><br>예전 2D 버전은 <code>classic.html</code>을 더블클릭하면 바로 열립니다.';
+  if (location.protocol === 'file:') document.getElementById('boot').innerHTML = '더블클릭으로 하려면 같은 폴더의 <code>play.html</code>을 여세요.<br>(이 index.html은 개발용이라 웹 서버로 열어야 합니다)';
 </script>
 <script type="module">
   import './js/main.js';

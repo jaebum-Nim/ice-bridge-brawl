@@ -6,14 +6,25 @@
 - **5대5 AI 대전**: 아군 AI 4명과 함께 적 AI 5명과 대전
 - **온라인 1대1**: 다음 업데이트 예정
 
-## 실행
+## PC에서 실행하기
 
-ES 모듈을 쓰기 때문에 **웹 주소로 열어야** 합니다.
+설치할 것은 없습니다. 최신 Chrome, Edge 또는 Firefox만 있으면 됩니다.
 
-- GitHub Pages: https://jaebum-nim.github.io/ice-bridge-brawl/ (Settings → Pages에서 `main` 브랜치를 켜면 동작)
-- 내 컴퓨터: 이 폴더에서 `python3 -m http.server` 실행 후 http://localhost:8000 접속
+1. 이 저장소 페이지에서 초록색 **Code** 버튼 → **Download ZIP**을 누릅니다.
+2. 받은 ZIP 파일의 압축을 풉니다.
+3. 폴더 안의 **`play.html`을 더블클릭**하면 게임이 열립니다.
 
-예전 2D 버전은 `classic.html`을 더블클릭하면 바로 열립니다.
+- 화면이 버벅이면 메뉴에서 그래픽을 '낮음'으로 바꾸세요.
+- 예전 2D 버전은 `classic.html`을 더블클릭하면 됩니다.
+
+### 개발할 때
+
+`play.html`은 `tools/build_single.py`가 자동으로 만드는 파일입니다. 코드는 `js/` 폴더에서 고치고 아래처럼 실행하세요.
+
+```
+python3 -m http.server      # http://localhost:8000 에서 index.html로 바로 확인
+python3 tools/build_single.py   # 고친 내용을 play.html에 반영
+```
 
 ## 조작
 
@@ -50,6 +61,7 @@ ES 모듈을 쓰기 때문에 **웹 주소로 열어야** 합니다.
 | `js/hud.js` | 체력바, 피해 숫자, 하단 패널, 미니맵 등 2D 오버레이 |
 | `js/main.js` | 메뉴, 입력, 상점, 게임 루프 |
 | `vendor/three/` | Three.js r187 (MIT) |
+| `play.html` | 더블클릭용 단일 파일 (자동 생성) |
 | `classic.html` | 예전 2D 버전 (파일 하나) |
 
 플레이어 조작은 모두 `cmd(hero, {c:'move'|'atk'|'cast'|...})` 명령으로 처리되므로, 온라인 대전에서도 같은 명령을 네트워크로 보내면 됩니다.

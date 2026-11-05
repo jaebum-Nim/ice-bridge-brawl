@@ -318,19 +318,22 @@ function kill(u, src) {
 }
 function respawn(u) { u.dead = false; const f = u.team ? -1 : 1; u.x = FOUNTAIN[u.team].x + f * rand(0, 80); u.y = MID_Y + rand(-120, 120); u.px = u.x; u.py = u.y; u.hp = u.maxHp; u.cc = { stun: 0, root: 0, slows: [] }; u.retreat = false; if (u.ctl === 'ai') aiShop(u); fx('ring', u.x, u.y, { r: 120, c: TEAMC[u.team] }); }
 export function useSpell(u, k, tx, ty) {
-  if (u.dead || u.cc.stun > 0 || u.dash) return;
-  if (k === 'D') { if (u.spellCd.D > 0) return; const [x, y] = clampPt(u, tx, ty, 425); blink(u, x, y); u.spellCd.D = 150; }
+  u.fail = '';
+  if (u.dead || u.cc.stun > 0 || u.dash) { u.fail = failWhy(u); return; }
+  if (k === 'D') { if (u.spellCd.D > 0) { u.fail = `점멸 재사용 대기 중 (${Math.ceil(u.spellCd.D)}초)`; return; } const [x, y] = clampPt(u, tx, ty, 425); blink(u, x, y); u.spellCd.D = 150; }
   if (k === 'F') {
     if (u.mark && u.mark.t > 0 && !u.mark.tgt.dead) { if (u.cc.root > 0) return; const t = u.mark.tgt; u.mark = null; dashTo(u, t.x, t.y, 1900, () => fx('ring', u.x, u.y, { r: 90, c: '#e0f2fe' }), false, t); return; }
-    if (u.spellCd.F > 0) return; const [dx, dy] = aimDir(u, tx, ty);
+    if (u.spellCd.F > 0) { u.fail = `눈덩이 재사용 대기 중 (${Math.ceil(u.spellCd.F)}초)`; return; } if (u.mark === null && u.cc.root > 0 && false) return; const [dx, dy] = aimDir(u, tx, ty);
     proj({ owner: u, x: u.x, y: u.y, dx, dy, speed: 1500, range: 1600, r: 40, color: '#ffffff', kind: 'snow', onHit(t) { dmg(u, t, 10 + u.level * 5, 't'); u.mark = { tgt: t, t: 3 }; } }); u.spellCd.F = 40;
   }
 }
+function failWhy(u) { return u.dead ? '사망 중' : u.cc.stun > 0 ? '기절 상태' : u.dash ? '이동 중' : ''; }
 export function tryCast(u, i, tx, ty) {
-  if (u.dead || u.cc.stun > 0 || u.dash) return false;
-  if (i === 3 && u.level < 6) return false;
-  if (u.cds[i] > 0) return false;
-  const ab = u.hd.ab[i]; const ok = ab.cast(u, tx, ty); if (ok === false) return false;
+  u.fail = '';
+  if (u.dead || u.cc.stun > 0 || u.dash) { u.fail = failWhy(u); return false; }
+  if (i === 3 && u.level < 6) { u.fail = '궁극기는 6레벨부터'; return false; }
+  if (u.cds[i] > 0) { u.fail = `재사용 대기 중 (${u.cds[i].toFixed(1)}초)`; return false; }
+  const ab = u.hd.ab[i]; const ok = ab.cast(u, tx, ty); if (ok === false) { u.fail = u.cc.root > 0 ? '속박 중에는 쓸 수 없음' : '사거리 안에 대상이 없음'; return false; }
   u.cds[i] = ab.cd * 100 / (100 + u.ah); u.castT = G.t; u.castI = i;
   if (!SELF_T.includes(ab.ai.t)) u.face = Math.atan2(ty - u.y, tx - u.x);
   return true;
@@ -352,10 +355,10 @@ export function cmd(h, c) {
         const t = G.units.find(e => e.id === c.tid);
         if (t && targetable(h, t) && Math.hypot(t.x - h.x, t.y - h.y) > ab.ai.range + t.hr) { cancelWind(h); h.pend = { i: c.i, tid: c.tid }; h.target = null; h.moveTo = null; break; }
       }
-      if (tryCast(h, c.i, c.x, c.y)) { h.pend = null; if (!SELF_T.includes(tt)) cancelWind(h); }
+      if (tryCast(h, c.i, c.x, c.y)) { h.pend = null; if (!SELF_T.includes(tt)) cancelWind(h); } else if (h.fail) ev({ t: 'fail', to: h.id, s: h.hd.ab[c.i].n + ': ' + h.fail });
       h.castTid = 0; break;
     }
-    case 'spell': useSpell(h, c.k, c.x, c.y); break;
+    case 'spell': useSpell(h, c.k, c.x, c.y); if (h.fail) ev({ t: 'fail', to: h.id, s: h.fail }); break;
     case 'buy': { const it = ITEMS[c.id]; if (!it || !(h.dead || inBase(h)) || h.items.includes(c.id) || h.gold < it.c || h.items.length >= 6) return; h.gold -= it.c; h.items.push(c.id); recalc(h); break; }
     case 'sell': { if (!(h.dead || inBase(h))) return; const id = h.items[c.i]; if (!id) return; h.gold += Math.floor(ITEMS[id].c * .7); h.items.splice(c.i, 1); recalc(h); break; }
   }
@@ -569,7 +572,7 @@ function physics() {
     const a = mob[i]; for (let j = i + 1; j < mob.length; j++) {
       const b = mob[j]; const rr = (a.r + b.r) * .75, dx = b.x - a.x, dy = b.y - a.y; if (Math.abs(dx) > rr || Math.abs(dy) > rr) continue; const d = Math.hypot(dx, dy) || .01; if (d < rr) {
         const o = (rr - d) / 2, nx = dx / d, ny = dy / d;
-        const wa = a.dash ? 0 : (a.kind === 'hero' && b.kind === 'minion' ? .3 : 1), wb = b.dash ? 0 : (b.kind === 'hero' && a.kind === 'minion' ? .3 : 1); a.x -= nx * o * wa; a.y -= ny * o * wa; b.x += nx * o * wb; b.y += ny * o * wb;
+        const wa = a.dash ? 0 : (a.kind === 'hero' && b.kind === 'minion' ? 0 : b.kind === 'hero' && a.kind === 'minion' ? 2 : 1), wb = b.dash ? 0 : (b.kind === 'hero' && a.kind === 'minion' ? 0 : a.kind === 'hero' && b.kind === 'minion' ? 2 : 1); a.x -= nx * o * wa; a.y -= ny * o * wa; b.x += nx * o * wb; b.y += ny * o * wb;
       }
     }
   }

@@ -45,6 +45,7 @@ function handleEvents() {
       else if (k === p) banner('적을 처치했습니다!', '#93c5fd', 1.8);
       else if (v === p) banner('처치당했습니다', '#fca5a5', 1.8);
     }
+    else if (e.t === 'fail') { if (e.to === p.id) S.hint = { s: e.s, t: 1.2 }; }
     else if (e.t === 'end') endGame(e.winner);
   }
   G.events.length = 0;
@@ -65,6 +66,7 @@ function frame(now) {
     for (const t of S.texts) { t.t -= dt; t.rise += dt * .9; } S.texts = S.texts.filter(t => t.t > 0);
     for (const m of S.feed) m.t -= dt; S.feed = S.feed.filter(m => m.t > 0);
     if (S.banner) { S.banner.t -= dt; if (S.banner.t <= 0) S.banner = null; }
+    if (S.hint) { S.hint.t -= dt; if (S.hint.t <= 0) S.hint = null; }
     S.mouse = R.pick(S.mx, S.my); S.aimPt = R.pickAt(S.mx, S.my, AIM_H); S.dt = dt;
     R.render(G, S.paused ? 0 : dt, { aiming: S.aiming, mouse: S.aimPt, camOff: S.camOff });
     hud.draw(G, R, S);
@@ -99,15 +101,19 @@ function castNow(i) {
 function hoverCursor() { if (!playing()) return; const e = unitUnderMouse(u => targetable(G.player, u)); hudCv.style.cursor = e ? 'pointer' : 'crosshair'; }
 function rightClick(drag) {
   const p = G.player; if (p.dead) return; S.aiming = -1; S.amove = false;
-  const e = unitUnderMouse(u => targetable(p, u));
+  let e = unitUnderMouse(u => targetable(p, u));
+  if (!e) { // 적 영웅 발밑 근처(지름 약 2칸) 바닥을 찍어도 그 영웅을 공격
+    let bd = 1e9; for (const h of G.heroes) { if (!targetable(p, h)) continue; const d = Math.hypot(h.x - S.mouse.x, h.y - S.mouse.y); if (d < h.hr + 90 && d < bd) { bd = d; e = h; } }
+  }
+  if (drag && S.pressTarget && !e && Math.hypot(S.mx - S.pressX, S.my - S.pressY) < 60) return; // 누른 채 살짝 움직인 건 무시
   if (e) { cmd(p, { c: 'atk', id: e.id }); if (!drag) R.clickMarker(e.x, e.y, '#f87171'); }
   else { cmd(p, { c: 'move', x: S.mouse.x, y: S.mouse.y }); if (!drag) R.clickMarker(S.mouse.x, S.mouse.y, '#4ade80'); }
 }
 hudCv.addEventListener('contextmenu', e => e.preventDefault());
-hudCv.addEventListener('mousemove', e => { S.mx = e.clientX; S.my = e.clientY; if (S.rightDown && playing()) { S.mouse = R.pick(S.mx, S.my); rightClick(true); } });
+hudCv.addEventListener('mousemove', e => { S.mx = e.clientX; S.my = e.clientY; if (S.rightDown && playing()) { const now = performance.now(); if (now - (S.dragT || 0) < 60) return; S.dragT = now; S.mouse = R.pick(S.mx, S.my); rightClick(true); } });
 hudCv.addEventListener('mousedown', e => {
   S.mx = e.clientX; S.my = e.clientY; if (!playing()) return; S.mouse = R.pick(S.mx, S.my); const p = G.player;
-  if (e.button === 2) { S.rightDown = true; rightClick(false); }
+  if (e.button === 2 || (e.button === 0 && S.aiming < 0 && !S.amove)) { S.rightDown = e.button === 2; S.pressX = S.mx; S.pressY = S.my; rightClick(false); S.pressTarget = !!G.player.target; return; }
   else if (e.button === 0) {
     if (S.aiming >= 0) { castNow(S.aiming); S.aiming = -1; }
     else if (S.amove && !p.dead) { cmd(p, { c: 'amove', x: S.mouse.x, y: S.mouse.y }); S.amove = false; R.clickMarker(S.mouse.x, S.mouse.y, '#f87171'); }
@@ -173,7 +179,7 @@ function buildMenu() {
   </div><div class="row" style="margin-top:12px"><span class="lbl">스킬 시전</span><div class="seg">${[['normal', '일반 (키 → 클릭)'], ['quick', '빠른 시전 (키 즉시)'], ['release', '키 떼면 시전']].map(([k, n]) => `<button data-c="${k}" class="${castMode === k ? 'on' : ''}">${n}</button>`).join('')}</div>
   <div style="flex:1"></div><button class="btn" id="go">게임 시작</button></div>
   <div id="menuErr" class="err"></div>
-  <div class="help"><b>조작법</b><br><kbd>우클릭</kbd> 이동·공격 (누른 채 끌면 계속 이동) &nbsp; <kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd><kbd>R</kbd> 스킬 (시전 방식은 위에서 선택, 조준 중 <kbd>우클릭</kbd>/<kbd>Esc</kbd> 취소) &nbsp; <kbd>D</kbd> 점멸 &nbsp; <kbd>F</kbd> 눈덩이 (맞춘 뒤 다시 <kbd>F</kbd>로 돌진)<br><kbd>A</kbd>+좌클릭 공격 이동 &nbsp; <kbd>S</kbd> 정지 &nbsp; <kbd>P</kbd> 상점 (기지 또는 사망 시) &nbsp; <kbd>Tab</kbd> 점수판 &nbsp; <kbd>←</kbd><kbd>→</kbd> 카메라, <kbd>Space</kbd> 복귀 &nbsp; <kbd>Esc</kbd> 일시정지<br>전투에서 벗어나면 체력이 천천히 차고, 다리 위 초록 구슬을 먹으면 즉시 회복됩니다. 적 분수대에 들어가면 순식간에 녹습니다. 화면이 버벅이면 그래픽을 '낮음'으로 바꿔보세요.</div></div>`;
+  <div class="help"><b>조작법</b><br><kbd>우클릭</kbd>(또는 좌클릭) 이동·공격, 누른 채 끌면 계속 이동 &nbsp; <kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd><kbd>R</kbd> 스킬 (시전 방식은 위에서 선택, 조준 중 <kbd>우클릭</kbd>/<kbd>Esc</kbd> 취소) &nbsp; <kbd>D</kbd> 점멸 &nbsp; <kbd>F</kbd> 눈덩이 (맞춘 뒤 다시 <kbd>F</kbd>로 돌진)<br><kbd>A</kbd>+좌클릭 공격 이동 &nbsp; <kbd>S</kbd> 정지 &nbsp; <kbd>P</kbd> 상점 (기지 또는 사망 시) &nbsp; <kbd>Tab</kbd> 점수판 &nbsp; <kbd>←</kbd><kbd>→</kbd> 카메라, <kbd>Space</kbd> 복귀 &nbsp; <kbd>Esc</kbd> 일시정지<br>전투에서 벗어나면 체력이 천천히 차고, 다리 위 초록 구슬을 먹으면 즉시 회복됩니다. 적 분수대에 들어가면 순식간에 녹습니다. 화면이 버벅이면 그래픽을 '낮음'으로 바꿔보세요.</div></div>`;
   m.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { M.mode = b.dataset.mode; buildMenu(); });
   m.querySelectorAll('[data-h]').forEach(c => c.onclick = () => { M.hero = c.dataset.h; buildMenu(); });
   m.querySelectorAll('[data-e]').forEach(c => c.onclick = () => { M.enemy = c.dataset.e; buildMenu(); });

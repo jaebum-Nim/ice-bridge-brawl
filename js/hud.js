@@ -100,6 +100,8 @@ export class Hud {
     if (!p.dead && inBase(p)) this.txt('P: 상점', ix + 70, py + 108, 12, '#86efac', 'left', 700);
     const sx = ix + 130; if (sx + 80 < px + pw) { const st = [['공격력', Math.round(p.ad)], ['주문력', Math.round(p.ap)], ['방어력', Math.round(p.def)], ['공격 속도', p.as.toFixed(2)], ['이동 속도', Math.round(effMs(p))], ['스킬 가속', p.ah]]; st.forEach((s, i) => { this.txt(s[0], sx, py + 24 + i * 16, 11.5, '#9fb3d1', 'left', 600); this.txt(s[1], px + pw - 14, py + 24 + i * 16, 11.5, '#e6eefc', 'right', 800); }); }
     if (S.amove) this.txt('공격 이동: 좌클릭으로 지점 선택', W / 2, py - 12, 13, '#fca5a5', 'center', 700, 3);
+    if (S.hint) { c.globalAlpha = Math.min(1, S.hint.t * 3); this.txt(S.hint.s, W / 2, py - (S.amove ? 32 : 12), 14, '#fca5a5', 'center', 800, 3); c.globalAlpha = 1; }
+    else if (S.aiming >= 0) this.txt('좌클릭: 시전 · 우클릭/Esc: 취소', W / 2, py - 12, 13, '#fde68a', 'center', 700, 3);
     for (const r of this.rects) {
       if (S.mx >= r.x && S.mx <= r.x + r.w && S.my >= r.y && S.my <= r.y + r.h) {
         c.font = `500 13px ${FONT}`; const lines = this.wrap(r.body, 280); const th = 56 + lines.length * 18, tw = 310, tx = clamp(r.x - tw / 2 + r.w / 2, 8, W - tw - 8), ty = py - th - 10;

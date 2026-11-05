@@ -325,6 +325,10 @@ export class Renderer {
     // 포탑 사거리
     let tw = null; if (p && !p.dead) for (const u of G.units) if (u.kind === 'tower' && !u.dead && u.team !== p.team && Math.hypot(u.x - p.x, u.y - p.y) < u.range + 450) tw = u;
     this.towerRange.material.opacity = tw ? (tw.target === p ? .8 : .35) : 0; if (tw) { this.towerRange.position.set(tw.x * K, .05, tw.y * K); this.towerRange.scale.setScalar(tw.range * K); }
+    if (!this.tgtRing) { this.tgtRing = decal(RING_G, 0xff4d4d, .9, true); this.scene.add(this.tgtRing); this.destDot = decal(DISC_G, 0x4ade80, .55, true); this.scene.add(this.destDot); }
+    const tg = p && !p.dead && (p.target || (p.pend && G.units.find(u => u.id === p.pend.tid)));
+    this.tgtRing.visible = !!(tg && !tg.dead); if (this.tgtRing.visible) { this.tgtRing.position.set(tg.x * K, .07, tg.y * K); this.tgtRing.scale.setScalar(((tg.hr || tg.r) * K) * (1.05 + Math.sin(G.t * 8) * .05)); }
+    this.destDot.visible = !!(p && !p.dead && p.moveTo && !p.target); if (this.destDot.visible) { this.destDot.position.set(p.moveTo.x * K, .05, p.moveTo.y * K); this.destDot.scale.setScalar(.12); }
     this.clickT += dt; this.clickRing.material.opacity = Math.max(0, .9 - this.clickT * 2.5); this.clickRing.scale.setScalar(Math.max(.05, .35 - this.clickT * .6));
     this.updateAim(G, p, opts.aiming, opts.mouse, opts.aiming >= 0 ? p.hd.ab[opts.aiming] : null);
     // 카메라

@@ -1,4 +1,4 @@
-// 마인크래프트 기본 스타일 블록 월드
+// 마인크래프트 기본 스타일 블록 맵 (다리 + 기지만, 주변 지형 없음)
 // - 16x16 픽셀 텍스처를 코드로 그림 (외부 이미지 없음)
 // - 블록 종류마다 InstancedMesh 하나 → 수천 개 블록도 적은 그리기 호출로 처리
 // - 재질은 전부 MeshLambertMaterial(텍스처 있음) 한 종류라 셰이더 프로그램이 하나만 생김
@@ -58,47 +58,29 @@ function noise2(seed) {
 /* ---------- 월드 생성 ---------- */
 // 좌표: 블록 1칸 = 월드 1 = 게임 100. 길 윗면 y=0, 길은 z 3~11, x 0~60
 export function buildBlockWorld(scene, L, teamColors) {
-  const R = seeded(42), n1 = noise2(7), n2 = noise2(19);
+  const R = seeded(42);
   const cells = new Map(); // "x,y,z" -> type
   const put = (x, y, z, t) => cells.set(x + ',' + y + ',' + z, t);
-  const WATER = -6, X0 = -18, X1 = Math.ceil(L) + 18, Z0 = -26, Z1 = 28;
+  const X0 = -6, X1 = Math.ceil(L) + 6, Z0 = -2, Z1 = 16;
   const H = new Map();
   const baseZone = x => x <= 8 || x >= L - 8;
-  // 1) 지형 높이
-  for (let x = X0; x <= X1; x++) for (let z = Z0; z <= Z1; z++) {
-    let h;
-    if (z >= 3 && z <= 11 && x >= -1 && x <= L + 1) h = 0; // 길
-    else if (baseZone(x) && z >= -4 && z <= 18) h = 0; // 기지 광장
-    else if ((z >= -3 && z <= 2) || (z >= 12 && z <= 17)) h = WATER; // 협곡 (물)
-    else { const d = z < 3 ? -4 - z : z - 18; h = Math.floor(n1(x * .12, z * .12) * 4 + n2(x * .05, z * .05) * 5 + Math.min(4, d * .35)) - 1; if (x < -4 || x > L + 4) h = Math.max(h, Math.floor(n1(x * .1, z * .1) * 3)); }
-    H.set(x + ',' + z, h);
-  }
-  const hAt = (x, z) => H.has(x + ',' + z) ? H.get(x + ',' + z) : 0;
+  // 1) 맵(다리 + 양쪽 기지)만 만들고 주변 지형·나무·물은 만들지 않음 (그릴 블록 수를 줄여 성능 확보)
+  const inMap = (x, z) => (z >= 3 && z <= 11 && x >= -1 && x <= L + 1) || (baseZone(x) && x >= -4 && x <= L + 4 && z >= 0 && z <= 14);
+  for (let x = X0; x <= X1; x++) for (let z = Z0; z <= Z1; z++) if (inMap(x, z)) H.set(x + ',' + z, 0);
+  const DEPTH = 3; // 가장자리는 3칸 두께의 벽으로 보이게
+  const hAt = (x, z) => H.has(x + ',' + z) ? H.get(x + ',' + z) : -DEPTH;
   // 2) 블록 쌓기 (보이는 면이 있는 깊이까지만)
-  for (let x = X0; x <= X1; x++) for (let z = Z0; z <= Z1; z++) {
-    const h = hAt(x, z), lane = z >= 3 && z <= 11 && x >= -1 && x <= L + 1, plaza = !lane && baseZone(x) && z >= -4 && z <= 18;
+  for (const k of H.keys()) {
+    const [x, z] = k.split(',').map(Number), h = 0, lane = z >= 3 && z <= 11;
     const minN = Math.min(hAt(x + 1, z), hAt(x - 1, z), hAt(x, z + 1), hAt(x, z - 1), h);
-    const bottom = Math.min(h - 1, minN) - (h === WATER ? 1 : 0);
-    for (let y = h - 1; y >= bottom; y--) {
-      let t;
-      if (lane) t = y === h - 1 ? (R() < .16 ? 'cobble' : R() < .06 ? 'snow' : 'brick') : 'brick';
-      else if (plaza) t = y === h - 1 ? (R() < .25 ? 'snow' : 'cobble') : 'stone';
-      else if (h === WATER) t = 'gravel';
-      else t = y === h - 1 ? 'grass' : y >= h - 3 ? 'dirt' : 'stone';
+    for (let y = h - 1; y >= Math.min(h - 1, minN); y--) {
+      const t = lane ? (y === h - 1 ? (R() < .16 ? 'cobble' : R() < .06 ? 'snow' : 'brick') : 'brick') : (y === h - 1 ? (R() < .25 ? 'snow' : 'cobble') : 'stone');
       put(x, y, z, t);
     }
   }
   // 3) 기지: 팀 색 블록 원, 분수 자리
   const fx = [1.7, L - 1.7];
   for (let t = 0; t < 2; t++) for (let x = -4; x <= 4; x++) for (let z = -4; z <= 4; z++) { const d = Math.hypot(x, z); if (d <= 2.2) put(Math.round(fx[t]) + x, -1, 7 + z, t ? 'red' : 'blue'); else if (d <= 3.2) put(Math.round(fx[t]) + x, -1, 7 + z, 'packed'); }
-  // 4) 가문비나무
-  for (let i = 0; i < 260; i++) {
-    const x = Math.floor(X0 + R() * (X1 - X0)), z = R() < .5 ? Math.floor(Z0 + R() * (-6 - Z0)) : Math.floor(20 + R() * (Z1 - 20));
-    const h = hAt(x, z); if (h <= WATER) continue; const th = 4 + Math.floor(R() * 3);
-    for (let y = h; y < h + th; y++) put(x, y, z, 'log');
-    const top = h + th;
-    for (let ly = 0; ly < 5; ly++) { const r = ly === 4 ? 0 : ly % 2 === 0 ? 2 : 1; const yy = top - 3 + ly; for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++) { if (r === 2 && Math.abs(dx) === 2 && Math.abs(dz) === 2) continue; if (dx === 0 && dz === 0 && yy < top) continue; put(x + dx, yy, z + dz, 'leaf'); } }
-  }
   // 5) 인스턴스 메시로 만들기
   const byType = {}; for (const [k, t] of cells) (byType[t] || (byType[t] = [])).push(k);
   const box = new THREE.BoxGeometry(1, 1, 1), m4 = new THREE.Matrix4(), group = new THREE.Group();
@@ -108,13 +90,6 @@ export function buildBlockWorld(scene, L, teamColors) {
     im.frustumCulled = false; group.add(im);
   }
   scene.add(group);
-  // 6) 물, 얼음 조각
-  const wt = makeTextures().water.clone(); wt.needsUpdate = true; wt.repeat.set(L + 40, 6);
-  const water = new THREE.Mesh(new THREE.PlaneGeometry(L + 40, 6), new THREE.MeshLambertMaterial({ map: wt, transparent: true, opacity: .88 })); water.rotation.x = -Math.PI / 2;
-  const w2 = water.clone(); water.position.set(L / 2, WATER + .7, -.5); w2.position.set(L / 2, WATER + .7, 14.5); scene.add(water, w2);
-  const iceG = new THREE.BoxGeometry(1, .15, 1), ice = new THREE.InstancedMesh(iceG, lam('ice'), 60);
-  for (let i = 0; i < 60; i++) { const x = 9 + Math.floor(R() * (L - 18)), z = R() < .5 ? -3 + Math.floor(R() * 6) : 12 + Math.floor(R() * 6); m4.makeTranslation(x, WATER + .75, z); ice.setMatrixAt(i, m4); }
-  scene.add(ice);
   // 7) 길 가장자리 돌담 + 등불
   const wallG = new THREE.BoxGeometry(1, .5, .36), postG = new THREE.BoxGeometry(.28, 1.1, .28), lampG = new THREE.BoxGeometry(.36, .4, .36);
   const nW = Math.floor(L - 14) + 1, walls = new THREE.InstancedMesh(wallG, lam('cobble'), nW * 2); let wi = 0;
@@ -124,12 +99,5 @@ export function buildBlockWorld(scene, L, teamColors) {
   const postM = new THREE.InstancedMesh(postG, lam('logSide'), posts.length); posts.forEach((p, i) => { m4.makeTranslation(...p); postM.setMatrixAt(i, m4); }); scene.add(postM);
   const lampMat = new THREE.MeshBasicMaterial({ map: makeTextures().lantern });
   const lampM = new THREE.InstancedMesh(lampG, lampMat, lamps.length); lamps.forEach((p, i) => { m4.makeTranslation(...p); lampM.setMatrixAt(i, m4); }); scene.add(lampM);
-  // 8) 구름 (평평한 흰 블록)
-  const cloudG = new THREE.BoxGeometry(1, 1, 1), cloudM = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .85, fog: false });
-  const clouds = new THREE.InstancedMesh(cloudG, cloudM, 40); const cl = [];
-  for (let i = 0; i < 40; i++) { const sx = 4 + R() * 9, sz = 3 + R() * 6; cl.push({ x: -40 + R() * (L + 80), z: -40 + R() * 70, sx, sz }); }
-  scene.add(clouds);
-  const updateClouds = (t) => { cl.forEach((c, i) => { const x = ((c.x + t * .6 + 60) % (L + 120)) - 60; m4.makeScale(c.sx, .8, c.sz).setPosition(x, 22, c.z); clouds.setMatrixAt(i, m4); }); clouds.instanceMatrix.needsUpdate = true; };
-  updateClouds(0);
-  return { water: [wt], lampPos: lamps, update: (t, dt) => { wt.offset.x += dt * .15; updateClouds(t); } };
+  return { lampPos: lamps, update: () => { } };
 }

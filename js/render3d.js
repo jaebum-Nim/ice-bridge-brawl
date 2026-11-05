@@ -226,11 +226,13 @@ export class Renderer {
           const g = this.take('zline', () => { const g = new THREE.Group(); g.add(decal(PLANE_G, 0xffffff, .15, true), decal(PLANE_G, 0xffffff, .35, true)); g.children[1].position.y = .01; return g; });
           const L = Math.hypot(z.x2 - z.x, z.y2 - z.y) * K; g.children.forEach(m => { m.material.color.set(z.color); m.scale.set(L, 1, z.w * K); }); g.rotation.y = -Math.atan2(z.y2 - z.y, z.x2 - z.x); v = { g, b: g.children[1], line: true, w: z.w * K, L };
         } else {
-          const g = this.take('zcirc', () => { const g = new THREE.Group(); g.add(decal(DISC_G, 0xffffff, .14, true), decal(RING_G, 0xffffff, .8, true), decal(DISC_G, 0xffffff, .3, true)); g.children[2].position.y = .01; return g; });
+          const g = this.take('zcirc', () => { const g = new THREE.Group(); g.add(decal(DISC_G, 0xffffff, .14, true), decal(RING_G, 0xffffff, .8, true), decal(DISC_G, 0xffffff, .3, true), decal(RING_G, 0xffffff, .6, true)); g.children[2].position.y = .01; return g; });
+          g.children[3].visible = !!z.inner; if (z.inner) g.children[3].scale.setScalar(z.inner * K);
           g.children.forEach(m => m.material.color.set(z.color)); g.children[0].scale.setScalar(z.r * K); g.children[1].scale.setScalar(z.r * K); v = { g, b: g.children[2], R: z.r * K };
         }
         v.g.position.set(z.x * K, .05, z.y * K); this.zviews.set(z.id, v);
       }
+      if (z.follow) v.g.position.set(z.x * K, .05, z.y * K);
       if (v.line) v.b.scale.set(v.L, 1, Math.max(.001, v.w * k)); else v.b.scale.setScalar(Math.max(.01, v.R * k));
     }
     for (const [id, v] of this.zviews) if (!seen.has(id)) { this.give(v.g); this.zviews.delete(id); }
@@ -257,6 +259,8 @@ export class Renderer {
       case 'death': P.burst(x, .6, z, f.small ? 8 : 26, { c, speed: f.small ? 2 : 4, up: 3, size: f.small ? .3 : .5, life: .7, g: 5 }); break;
       case 'collapse': P.burst(x, 1.5, z, f.big ? 100 : 50, { c, speed: f.big ? 8 : 5, up: 6, size: .6, life: 1.4, g: 6 }); for (let i = 0; i < 18; i++) P.emit(x + (Math.random() - .5) * 2, 2 + Math.random() * 2, z + (Math.random() - .5) * 2, { c: '#94a3b8', vx: (Math.random() - .5) * 4, vz: (Math.random() - .5) * 4, vy: 2 + Math.random() * 3, g: 10, size: .5, life: 1.2, a: .9 }); this.shake = Math.max(this.shake, f.big ? 1.2 : .6); break;
       case 'sword': { const g = this.take('sword', () => { const g = new THREE.Group(); const b = new THREE.Mesh(this.geo.swordBlade, new THREE.MeshBasicMaterial({ color: 0xfde047, transparent: true })); b.position.y = 1.6; g.add(b); g.add(glowSprite(0xfde047, 3, .8)); return g; }); g.position.set(x, 6, z); this.fxl.push({ m: g, t: 0, dur: .5, kind: 'drop' }); this.shake = Math.max(this.shake, .35); break; }
+      case 'cone': { const m = this.fxMesh('coneFx', () => { const g = new THREE.CircleGeometry(1, 24, -.5, 1); g.rotateX(-Math.PI / 2); return decal(g, 0xffffff, .5, true); }, c); m.position.set(x, .06, z); m.scale.setScalar(f.r * K); m.rotation.y = -f.a; this.fxl.push({ m, t: 0, dur: .35, kind: 'fade' }); break; }
+      case 'axe': { ring(f.r * K, .4, 1); const m = this.fxMesh('axeArc', () => decal(new THREE.RingGeometry(.48, 1, 40, 1, 0, 2.2).rotateX(-Math.PI / 2), 0xffffff, .7, true), c); m.position.set(x, .4, z); m.scale.setScalar(f.r * K); this.fxl.push({ m, t: 0, dur: .3, kind: 'sweep' }); for (let i = 0; i < 18; i++) { const a = i / 18 * 6.28; P.emit(x + Math.cos(a) * f.r * K * .8, .6, z + Math.sin(a) * f.r * K * .8, { c, vx: -Math.sin(a) * 4, vz: Math.cos(a) * 4, size: .4, life: .35 }); } this.shake = Math.max(this.shake, .2); break; }
       case 'blades': for (let i = 0; i < 14; i++) { const a = i / 14 * 6.28; P.emit(x, .7, z, { c, vx: Math.cos(a) * 5, vz: Math.sin(a) * 5, size: .35, life: .35, drag: .9 }); } ring(f.r * K, .35); break;
     }
   }
@@ -269,6 +273,7 @@ export class Renderer {
       else if (f.kind === 'spike') { f.m.position.y = k < .25 ? lerp(-.5, .3, k / .25) : k > .75 ? lerp(.3, -.6, (k - .75) / .25) : .3; }
       else if (f.kind === 'beam') { const s = 1 - k; f.m.scale.set(1, s, s); f.m.children[0].material.opacity = s; f.m.children[1].material.opacity = .6 * s; }
       else if (f.kind === 'fade') f.m.material.opacity = 1 - k;
+      else if (f.kind === 'sweep') { f.m.rotation.y = -k * Math.PI * 2.2; f.m.material.opacity = .7 * (1 - k); }
       else if (f.kind === 'nova') { f.m.scale.setScalar(Math.max(.01, f.R * (1 - Math.pow(1 - k, 2)))); f.m.material.opacity = .35 * (1 - k); }
       else if (f.kind === 'column') { const u = G.units.find(q => q.id === f.follow); if (u) f.m.position.set(u.x * K, 1.5, u.y * K); f.m.scale.set(1 - k * .5, 1 + k, 1 - k * .5); f.m.material.opacity = .4 * (1 - k); }
       else if (f.kind === 'drop') { f.m.position.y = Math.max(0, 6 * (1 - k * 3)); f.m.children[0].material.opacity = k > .6 ? (1 - k) / .4 : 1; }
@@ -280,7 +285,7 @@ export class Renderer {
   warmup() {
     const fake = { fxq: [], units: [] }, far = 99999;
     for (const kind of ['arrow', 'big', 'chain', 'snow', 'tower', 'orb', 'auto']) { const v = this.makeProj({ id: -1, kind, color: '#ffffff', r: 20 }); v.o.position.set(30, -50, 7); this.give(v.o); if (v.line) this.give(v.line); this.pviews.delete(-1); }
-    for (const type of ['ring', 'vines', 'beam', 'slash', 'nova', 'bolt', 'levelup', 'sword']) this.spawnFx({ type, x: far, y: far, x2: far + 10, y2: far, r: 100, w: 100, c: '#ffffff' }, fake);
+    for (const type of ['ring', 'vines', 'beam', 'slash', 'nova', 'bolt', 'levelup', 'sword', 'cone', 'axe']) this.spawnFx({ type, x: far, y: far, x2: far + 10, y2: far, r: 100, w: 100, c: '#ffffff' }, fake);
     this.syncZones({ zones: [{ id: -2, x: far, y: far, r: 100, t: 0, delay: 1, color: '#ffffff' }, { id: -3, line: true, x: far, y: far, x2: far + 10, y2: far, w: 50, t: 0, delay: 1, color: '#ffffff' }] });
     this.r.compile(this.scene, this.cam);
     this.syncZones({ zones: [] });
@@ -298,6 +303,7 @@ export class Renderer {
       else { A.line.visible = true; A.line.scale.set(L, 1, a.w * K); A.line.rotation.y = -ang; }
     } else if (a.t === 'aoe') { A.range.visible = true; A.range.scale.setScalar(a.range * K); const [x, y] = clampPt(p, mouse.x, mouse.y, a.range); A.circ.visible = A.circR.visible = true; A.circ.position.set((x - p.x) * K, .04, (y - p.y) * K); A.circR.position.copy(A.circ.position); A.circ.scale.setScalar(a.r * K); A.circR.scale.setScalar(a.r * K); }
     else if (a.t === 'dash') { A.range.visible = true; A.range.scale.setScalar(a.range * K); const [x, y] = clampPt(p, mouse.x, mouse.y, a.range); A.circR.visible = true; A.circR.position.set((x - p.x) * K, .04, (y - p.y) * K); A.circR.scale.setScalar(.45); }
+    else if (a.t === 'cone') { A.cone.visible = true; A.cone.scale.setScalar(a.range * K); A.cone.rotation.y = -ang; }
     else if (a.t === 'target' || a.t === 'exec') { A.range.visible = true; A.range.scale.setScalar((a.range + p.r) * K); const t = pickTarget(p, mouse.x, mouse.y, a.range, a.t === 'exec'); if (t) { A.tgt.visible = true; A.tgt.position.set((t.x - p.x) * K, .05, (t.y - p.y) * K); A.tgt.scale.setScalar(.65); } }
   }
   reset() {

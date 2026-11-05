@@ -216,6 +216,46 @@ const DESIGN = {
     R.orb = glow('handR', G_.sph(.05), 0xfef08a, [.05, 1.08, 0]); R.orb.add(glowSprite(0xfbcfe8, .7, .6));
     cape(L, tc, .5, .38, .03);
     return { style: 'staff', scale: .97 };
+  },
+  rokan(L, tc, glow) {
+    const teal = 0x2a9d8f, bronze = 0xb07a3a, dk = 0x1f3a3a, hair = 0x222222;
+    baseBody(L, { bulk: 1.02, colors: { body: teal, pants: dk, arm: SKIN, fore: SKIN, boots: 0x3b2a1a } });
+    L.spine.push(P(G_.tor(.165, .04, 8, 20), bronze, [0, .03, 0], [Math.PI / 2, 0, 0], [.78, 1.08, 1]));
+    L.spine.push(P(G_.box(.04, .55, .08), bronze, [.12, .3, -.02], [.55, 0, 0]));
+    for (const k of ['L', 'R']) { L['elbow' + k].push(P(G_.cyl(.055, .05, .14, 12), 0xe8e2d0, [0, -.18, 0])); L['shoulder' + k].push(P(G_.sph(.08), teal, [0, .02, 0], [0, 0, 0], [1.1, .7, 1.1])); }
+    // 머리띠 + 상투
+    L.head.push(P(G_.sph(.16), hair, [-.03, .05, 0], [0, 0, 0], [1, .9, 1.02]));
+    L.head.push(P(G_.tor(.158, .022, 6, 24), tc, [0, .06, 0], [Math.PI / 2, 0, 0]));
+    L.head.push(P(G_.sph(.06), hair, [-.05, .2, 0], [0, 0, 0], [1, 1.2, 1]));
+    L.head.push(P(G_.box(.06, .02, .2), 0x2b2b2b, [.14, .07, 0]));
+    // 긴 쇠봉 (손에서 앞뒤로 뻗음)
+    L.handR.push(P(G_.cyl(.03, .03, 1.9, 10), 0x5b6573, [.4, -.03, 0], [0, 0, Math.PI / 2]));
+    for (const x of [-.55, 1.35]) L.handR.push(P(G_.cyl(.042, .042, .14, 10), bronze, [x, -.03, 0], [0, 0, Math.PI / 2]));
+    L.handR.push(P(G_.cyl(.036, .036, .2, 10), 0x7a4a24, [0, -.03, 0], [0, 0, Math.PI / 2]));
+    // 머리띠 꼬리 (망토 뼈대에 달아 휘날리게)
+    L.cape.push(P(G_.box(.025, .5, .07), tc, [-.01, -.25, .05], [.15, 0, 0])); L.cape.push(P(G_.box(.025, .42, .07), tc, [-.01, -.21, -.05], [-.15, 0, 0]));
+    return { style: 'slash', scale: 1.02 };
+  },
+  braks(L, tc, glow) {
+    const iron = 0x4a4f5c, crim = 0x8f1d2c, dk = 0x24262d, beard = 0x4a2e1c;
+    baseBody(L, { bulk: 1.18, colors: { body: iron, pants: dk, arm: iron, fore: crim, boots: dk, hand: dk } });
+    L.spine.push(P(G_.sph(.21), crim, [.07, .3, 0], [0, 0, 0], [.55, .72, 1.12]));
+    L.spine.push(P(G_.box(.06, .4, .06), 0xb8bec9, [.15, .3, 0], [0, 0, 0]));
+    L.hips.push(P(G_.lathe([[.17, .05], [.21, -.12], [.25, -.32], [.001, -.32]], 16), crim, [0, 0, 0], [0, 0, 0], [.95, 1, 1.1]));
+    // 민머리 + 수염 + 흉터 띠
+    L.head.push(P(G_.cone(.11, .2, 10), beard, [.09, -.12, 0], [0, 0, Math.PI - .35]));
+    L.head.push(P(G_.box(.03, .03, .13), beard, [.135, .07, 0]));
+    // 가시 어깨갑
+    for (const k of ['L', 'R']) { const s = k === 'L' ? -1 : 1; L['shoulder' + k].push(P(G_.sph(.155), iron, [0, .04, .02 * s], [0, 0, 0], [1.08, .78, 1.08])); for (let i = 0; i < 3; i++) L['shoulder' + k].push(P(G_.cone(.035, .17, 6), 0xb8bec9, [-.06 + i * .06, .15, .06 * s], [.35 * s, 0, 0])); }
+    // 대형 도끼: 긴 자루 + 초승달 날
+    L.handR.push(P(G_.cyl(.032, .032, 1.45, 10), 0x5a3a1e, [.45, -.03, 0], [0, 0, Math.PI / 2]));
+    const sh = new THREE.Shape(); sh.moveTo(0, .05); sh.quadraticCurveTo(.2, .1, .3, .38); sh.quadraticCurveTo(.05, .3, -.12, .42); sh.quadraticCurveTo(-.05, .2, -.1, .05); sh.closePath();
+    const blade = G_.extrude(sh, .035, .008);
+    L.handR.push(P(blade, 0xc9ced6, [1.0, .0, 0], [0, 0, 0], [1, 1, 1]));
+    L.handR.push(P(blade, 0xc9ced6, [1.0, -.06, 0], [Math.PI, 0, 0], [1, 1, 1]));
+    L.handR.push(P(G_.sph(.05), crim, [1.06, -.03, 0]));
+    cape(L, tc, .85, .55, .04);
+    return { style: 'slash', scale: 1.06 };
   }
 };
 

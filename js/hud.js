@@ -67,6 +67,7 @@ export class Hud {
     const c = this.ctx, W = this.W, H = this.H, p = G.player;
     const pw = Math.min(800, W - 16), ph = 118, px = (W - pw) / 2, py = H - ph - 6;
     this.rr(px, py, pw, ph, 14); c.fillStyle = 'rgba(8,14,28,.9)'; c.fill(); c.strokeStyle = '#24395c'; c.lineWidth = 1.5; c.stroke();
+    if (p.hd.passive) this.rects.push({ x: px + 16, y: py + 14, w: 68, h: 68, title: p.name + ' — 기본 지속 효과', sub: '', body: p.hd.passive });
     c.beginPath(); c.arc(px + 50, py + 48, 34, 0, 7); c.fillStyle = p.hd.color; c.fill(); c.lineWidth = 5; c.strokeStyle = TEAMC[p.team]; c.stroke();
     this.txt(p.name[0], px + 50, py + 61, 34, '#16161c', 'center', 900);
     c.beginPath(); c.arc(px + 76, py + 78, 14, 0, 7); c.fillStyle = '#0b1220'; c.fill(); c.strokeStyle = '#ffd166'; c.lineWidth = 2; c.stroke(); this.txt(p.level, px + 76, py + 83, 13, '#ffd166', 'center', 800);

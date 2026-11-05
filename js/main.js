@@ -27,9 +27,10 @@ function addText(x, y, s, c, big) { S.texts.push({ x, y, s, c, t: .9, rise: 0, b
 function handleEvents() {
   const p = G.player;
   for (const e of G.events) {
-    if (e.t === 'banner') banner(e.s, e.c, e.d);
+    if (e.t === 'banner') { if (!e.to || e.to === p.id) banner(e.s, e.c, e.d); }
     else if (e.t === 'text') {
-      if (e.to === p.id) { if (e.k === 'heal') addText(e.x, e.y, e.s, '#5ef08a'); else if (G.heroes.some(h => h.id === e.from)) addText(e.x, e.y, e.s, '#ff6b6b'); }
+      if (e.k === 'dodge') { if (e.to === p.id || e.from === p.id) addText(e.x, e.y, e.s, '#99f6e4'); }
+      else if (e.to === p.id) { if (e.k === 'heal') addText(e.x, e.y, e.s, '#5ef08a'); else if (G.heroes.some(h => h.id === e.from)) addText(e.x, e.y, e.s, '#ff6b6b'); }
       else if (e.from === p.id) addText(e.x + (Math.random() - .5) * 40, e.y, e.k === 'c' ? e.s + '!' : e.s, e.k === 'm' ? '#c4b5fd' : e.k === 't' ? '#ffffff' : e.k === 'c' ? '#fde047' : '#fdba74', e.k === 'c' || e.s >= 200);
       else if (e.k === 'heal' && e.team === p.team) addText(e.x, e.y, e.s, '#5ef08a');
     }
@@ -153,7 +154,7 @@ function renderShop() {
 const M = { mode: '1v1', hero: 'graff', enemy: 'random', diff: 1 };
 function heroCards(sel, attr) {
   let h = '';
-  for (const d of HEROES) h += `<div class="card ${sel === d.id ? 'sel' : ''}" data-${attr}="${d.id}"><div class="top"><div class="av" style="background:${d.color}">${d.name[0]}</div><div><b>${d.name}</b><div class="role">${ROLE[d.role]}</div></div></div><div class="d">${d.desc}</div><ul>${d.ab.map((a, i) => `<li><span>${'QWER'[i]}</span>${a.n}</li>`).join('')}</ul></div>`;
+  for (const d of HEROES) h += `<div class="card ${sel === d.id ? 'sel' : ''}" data-${attr}="${d.id}"><div class="top"><div class="av" style="background:${d.color}">${d.name[0]}</div><div><b>${d.name}</b><div class="role">${ROLE[d.role]}</div></div></div><div class="d">${d.desc}</div>${d.passive ? `<div class="d" style="color:#a5b4fc">${d.passive}</div>` : ''}<ul>${d.ab.map((a, i) => `<li><span>${'QWER'[i]}</span>${a.n}</li>`).join('')}</ul></div>`;
   h += `<div class="card ${sel === 'random' ? 'sel' : ''}" data-${attr}="random"><div class="top"><div class="av" style="background:#e6eefc">?</div><div><b>무작위</b><div class="role">랜덤</div></div></div><div class="d">어떤 영웅이 걸릴지 모릅니다.</div></div>`;
   return h;
 }

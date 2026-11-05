@@ -49,7 +49,9 @@ python3 tools/build_single.py   # 고친 내용을 play.html에 반영
 | 카이라 | 원거리 딜러 | 화살 견제, 순간이동, 맵 관통 화살 |
 | 바르칸 | 전사 | 회전베기, 잃은 체력 비례 처형 |
 | 니야 | 암살자 | 대상 돌진(처치 시 초기화), 회전 칼날 |
-| 테라 | 서포터 | 치유, 속박 덩굴, 광역 회복 |
+| 테라 | 서포터 | 치유, 속박 덩굴, 광역 회복, 평타 둔화 |
+| 로칸 | 전사 | 평타마다 공속 중첩, 도약 강타, 평타 회피 후 광역 기절(반격 태세), 방어력 강화 |
+| 브락스 | 전사 | 출혈 5중첩 시 공격력 증가, 원형 베기(바깥 날로 회복), 부채꼴 끌어오기, 처치 시 초기화되는 단두대 |
 
 ## 구조
 
@@ -69,6 +71,11 @@ python3 tools/build_single.py   # 고친 내용을 play.html에 반영
 플레이어 조작은 모두 `cmd(hero, {c:'move'|'atk'|'cast'|...})` 명령으로 처리되므로, 온라인 대전에서도 같은 명령을 네트워크로 보내면 됩니다.
 
 ## 테스트
+
+```
+node tools/balance.mjs 10 0 2 /tmp/a.json & node tools/balance.mjs 10 1 2 /tmp/b.json & wait
+node tools/balance.mjs --merge /tmp/a.json /tmp/b.json   # 모든 1대1 조합 승률표
+```
 
 ```
 node tools/sim-test.mjs 9 1v1   # AI끼리 9판을 끝까지 돌려 결과 표 출력

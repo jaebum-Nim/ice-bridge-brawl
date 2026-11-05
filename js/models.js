@@ -16,8 +16,9 @@ export function glowSprite(color, size, opacity = 1) {
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false }));
   s.scale.set(size, size, 1); return s;
 }
-export function mat(color, o = {}) { return new THREE.MeshStandardMaterial(Object.assign({ color, roughness: .6, metalness: .08, flatShading: true }, o)); }
-export function emis(color, intensity = 2, o = {}) { return new THREE.MeshStandardMaterial(Object.assign({ color, emissive: color, emissiveIntensity: intensity, roughness: .3, flatShading: true }, o)); }
+// 셰이더 최소화: 모든 모델은 Lambert(면 단위 음영) 재질, 빛나는 부분은 Basic 재질
+export function mat(color, o = {}) { const { roughness, metalness, ...rest } = o; return new THREE.MeshLambertMaterial(Object.assign({ color, flatShading: true }, rest)); }
+export function emis(color, intensity = 2, o = {}) { const { roughness, metalness, emissive, emissiveIntensity, ...rest } = o; return new THREE.MeshBasicMaterial(Object.assign({ color }, rest)); }
 function M(geo, m, x = 0, y = 0, z = 0, shadow = true) { const me = new THREE.Mesh(geo, m); me.position.set(x, y, z); me.castShadow = shadow; return me; }
 const cap = (r, l) => new THREE.CapsuleGeometry(r, l, 3, 7);
 const box = (x, y, z) => new THREE.BoxGeometry(x, y, z);
@@ -29,7 +30,7 @@ const cone = (r, h, s = 8) => new THREE.ConeGeometry(r, h, s);
 // 정면 = +X, 오른쪽 = +Z
 function rig(spec, teamColor) {
   const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
-  const main = mat(spec.main, { metalness: spec.metal || .05, roughness: spec.metal ? .45 : .65 }), dark = mat(spec.dark), skin = mat(0xf2d3b8), team = mat(teamColor, { roughness: .8 });
+  const main = mat(spec.main), dark = mat(spec.dark), skin = mat(0xf2d3b8), team = mat(teamColor);
   const mats = [main, dark, skin, team];
   const R = { g, body, mats, main, dark, skin, team };
   if (!spec.skirt) {
@@ -67,7 +68,7 @@ export function buildHero(id, teamColor) {
     head.add(M(box(.34, .3, .32), main, .01, .02, 0)); head.add(M(box(.04, .05, .24), emis(0x67e8f9, 3), .17, .02, 0, false));
     for (const s of [-1, 1]) { body.add(M(sph(.17, 7, 5), main, 0, 1.2, .3 * s)); }
     handR.add(M(box(.26, .24, .24), dark)); handL.add(M(box(.26, .24, .24), dark));
-    const ch = M(new THREE.TorusGeometry(.2, .05, 5, 10), mat(0x9ca3af, { metalness: .8, roughness: .3 }), -.24, .95, 0); ch.rotation.y = Math.PI / 2; body.add(ch);
+    const ch = M(new THREE.TorusGeometry(.2, .05, 5, 10), mat(0x9ca3af), -.24, .95, 0); ch.rotation.y = Math.PI / 2; body.add(ch);
     R.weapon = handR;
   } else if (id === 'solin') {
     head.add(M(sph(.17, 9, 6), mat(0xfff2c2), -.03, .05, 0)); // 머리카락
@@ -84,20 +85,20 @@ export function buildHero(id, teamColor) {
     head.add(M(box(.32, .26, .3), main, 0, .03, 0));
     for (const s of [-1, 1]) { const h = M(cone(.05, .26, 5), mat(0xf5f5f4), 0, .2, .15 * s); h.rotation.x = -.5 * s; head.add(h); }
     for (const s of [-1, 1]) body.add(M(box(.2, .12, .22), main, 0, 1.22, .3 * s));
-    const sw = new THREE.Group(); sw.add(M(box(.06, .22, .06), dark, 0, -.02, 0)); sw.add(M(box(.08, .06, .3), mat(0xfacc15, { metalness: .7, roughness: .3 }), 0, -.14, 0));
-    const blade = M(box(.04, 1.05, .14), mat(0xe5e7eb, { metalness: .9, roughness: .2, emissive: 0xfbbf24, emissiveIntensity: .15 }), 0, -.7, 0); sw.add(blade);
+    const sw = new THREE.Group(); sw.add(M(box(.06, .22, .06), dark, 0, -.02, 0)); sw.add(M(box(.08, .06, .3), mat(0xfacc15), 0, -.14, 0));
+    const blade = M(box(.04, 1.05, .14), mat(0xe5e7eb), 0, -.7, 0); sw.add(blade);
     sw.rotation.z = Math.PI / 2 + .2; handR.add(sw); R.weapon = sw;
   } else if (id === 'niya') {
     const hood = M(cone(.22, .42, 7), main, -.03, .12, 0); head.add(hood);
     head.add(M(box(.03, .04, .18), emis(0xe9d5ff, 3), .15, 0, 0, false));
     const scarf = M(new THREE.TorusGeometry(.16, .05, 5, 10), R.team, 0, 1.17, 0); scarf.rotation.x = Math.PI / 2; body.add(scarf);
-    for (const h of [handR, handL]) { const dg = new THREE.Group(); const bl = M(cone(.035, .45, 4), mat(0xe9d5ff, { emissive: 0xc084fc, emissiveIntensity: 1.2, metalness: .7 }), 0, -.25, 0); bl.rotation.x = Math.PI; dg.add(bl); dg.rotation.z = Math.PI / 2; h.add(dg); }
+    for (const h of [handR, handL]) { const dg = new THREE.Group(); const bl = M(cone(.035, .45, 4), emis(0xe9d5ff), 0, -.25, 0); bl.rotation.x = Math.PI; dg.add(bl); dg.rotation.z = Math.PI / 2; h.add(dg); }
     R.weapon = handR;
   } else if (id === 'tera') {
     head.add(M(sph(.17, 9, 6), mat(0x7c3a2e), -.04, .03, 0));
     const crown = M(new THREE.TorusGeometry(.16, .03, 4, 12), mat(0x4ade80), 0, .1, 0); crown.rotation.x = Math.PI / 2; head.add(crown);
     const staff = new THREE.Group(); staff.add(M(cyl(.025, .03, 1.4, 6), mat(0x6b4423), 0, .1, 0));
-    const fl = new THREE.Group(); fl.position.y = .85; for (let i = 0; i < 5; i++) { const p = M(sph(.08, 6, 5), mat(0xf9a8d4, { emissive: 0xf472b6, emissiveIntensity: .8 }), Math.cos(i * 1.256) * .1, 0, Math.sin(i * 1.256) * .1, false); p.scale.y = .5; fl.add(p); }
+    const fl = new THREE.Group(); fl.position.y = .85; for (let i = 0; i < 5; i++) { const p = M(sph(.08, 6, 5), mat(0xf9a8d4), Math.cos(i * 1.256) * .1, 0, Math.sin(i * 1.256) * .1, false); p.scale.y = .5; fl.add(p); }
     const ctr = M(sph(.06, 7, 5), emis(0xfde047, 3), 0, .02, 0, false); fl.add(ctr); fl.add(glowSprite(0xfbcfe8, .7, .6)); staff.add(fl); staff.rotation.x = .15; handR.add(staff); R.weapon = staff; R.orb = fl;
   }
   if (sp.scale) R.g.scale.setScalar(sp.scale);
@@ -109,7 +110,7 @@ const minionMats = {};
 function mm(team, tc) {
   if (minionMats[team]) return minionMats[team];
   const c = new THREE.Color(tc);
-  return minionMats[team] = { body: mat(c.clone().multiplyScalar(.55)), trim: mat(c), metal: mat(0xb8c2cf, { metalness: .7, roughness: .35 }), orb: emis(c.getHex(), 3), wood: mat(0x6b4a2b) };
+  return minionMats[team] = { body: mat(c.clone().multiplyScalar(.55)), trim: mat(c), metal: mat(0xb8c2cf), orb: emis(c.getHex(), 3), wood: mat(0x6b4a2b) };
 }
 const MG = {};
 function mg() {

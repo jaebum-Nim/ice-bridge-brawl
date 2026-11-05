@@ -18,11 +18,6 @@ mods = {
     'three/core': ('vendor/three/three.core.js', {}),
     'three': ('vendor/three/three.module.js', {'./three.core.js': 'three/core'}),
 }
-pp = 'vendor/three/addons/postprocessing/'
-for f in os.listdir(os.path.join(ROOT, pp)):
-    mods['three/addons/postprocessing/' + f] = (pp + f, {})
-for f in os.listdir(os.path.join(ROOT, 'vendor/three/addons/shaders')):
-    mods['three/addons/shaders/' + f] = ('vendor/three/addons/shaders/' + f, {})
 for f in os.listdir(os.path.join(ROOT, 'js')):
     if f.endswith('.js'):
         mods['app/' + f] = ('js/' + f, {})

@@ -20,12 +20,12 @@ const S = (u, b, l) => b + l * (u.level - 1);
 /* ================= 영웅 ================= */
 export const ROLE = { tank: '탱커', mage: '마법사', adc: '원거리 딜러', fighter: '전사', assassin: '암살자', support: '서포터' };
 const BASES = {
-  tank: { hp: 720, hpL: 115, ad: 82, adL: 6, df: 28, dfL: 3, as: .68, asL: .022, ms: 340, range: 160 },
+  tank: { hp: 770, hpL: 120, ad: 84, adL: 6.2, df: 33, dfL: 3, as: .68, asL: .022, ms: 340, range: 160 },
   mage: { hp: 555, hpL: 94, ad: 72, adL: 5.2, df: 16, dfL: 2.6, as: .66, asL: .02, ms: 330, range: 550 },
   adc: { hp: 560, hpL: 95, ad: 80, adL: 5.6, df: 18, dfL: 2.6, as: .72, asL: .04, ms: 330, range: 550 },
   fighter: { hp: 660, hpL: 108, ad: 88, adL: 6.6, df: 25, dfL: 3, as: .7, asL: .03, ms: 345, range: 185 },
   assassin: { hp: 640, hpL: 100, ad: 94, adL: 6.3, df: 25, dfL: 2.9, as: .72, asL: .036, ms: 350, range: 160 },
-  support: { hp: 600, hpL: 100, ad: 74, adL: 5.2, df: 26, dfL: 2.6, as: .65, asL: .02, ms: 335, range: 525 }
+  support: { hp: 585, hpL: 98, ad: 70, adL: 5, df: 26, dfL: 2.6, as: .65, asL: .02, ms: 335, range: 525 }
 };
 function HD(o) { return Object.assign({}, BASES[o.role], o); }
 export const HEROES = [
@@ -33,11 +33,11 @@ export const HEROES = [
     { n: '사슬 갈고리', cd: 14, desc: '사슬을 던져 처음 맞은 적에게 피해를 주고 내 앞으로 끌어와 기절시킵니다.', ai: { t: 'shot', range: 1050, speed: 1800, w: 68 },
       cast(u, tx, ty) { const [dx, dy] = aimDir(u, tx, ty); proj({ owner: u, x: u.x, y: u.y, dx, dy, speed: 1800, range: 1050, r: 34, color: '#dbe3ee', kind: 'chain', onHit(t) { dmg(u, t, S(u, 80, 26) + u.ap * .9 + u.ad * .3, 'm'); const [nx, ny] = norm(t.x - u.x, t.y - u.y); dashTo(t, u.x + nx * (u.r + t.r + 10), u.y + ny * (u.r + t.r + 10), 2200, null, true); stun(t, .65); } }); } },
     { n: '과부하', cd: 16, desc: '3초간 이동 속도가 크게 오르고 보호막을 얻습니다.', ai: { t: 'engage', r: 850 },
-      cast(u) { buff(u, 'ms', .45, 3); shield(u, S(u, 60, 18) + u.maxHp * .08, 3); fx('ring', u.x, u.y, { r: 90, c: '#93c5fd' }); fx('aura', u.x, u.y, { c: '#93c5fd', follow: u.id, dur: 3 }); } },
+      cast(u) { buff(u, 'ms', .45, 3); shield(u, S(u, 70, 20) + u.maxHp * .1, 3); fx('ring', u.x, u.y, { r: 90, c: '#93c5fd' }); fx('aura', u.x, u.y, { c: '#93c5fd', follow: u.id, dur: 3 }); } },
     { n: '지면 강타', cd: 9, desc: '주변 적을 띄워 올리고 피해를 줍니다.', ai: { t: 'self', r: 260 },
-      cast(u) { aoeNow(u, u.x, u.y, 260, t => { dmg(u, t, S(u, 60, 20) + u.ad * .8, 'p'); stun(t, .75); t.airT = .75; }, '#cbd5e1'); fx('quake', u.x, u.y, { r: 260, c: '#cbd5e1' }); } },
+      cast(u) { aoeNow(u, u.x, u.y, 260, t => { dmg(u, t, S(u, 72, 24) + u.ad * .9, 'p'); stun(t, .75); t.airT = .75; }, '#cbd5e1'); fx('quake', u.x, u.y, { r: 260, c: '#cbd5e1' }); } },
     { n: '정전기장', cd: 70, desc: '넓은 범위에 전기 충격을 일으켜 큰 피해를 주고 둔화시킵니다.', ai: { t: 'self', r: 520 },
-      cast(u) { aoeNow(u, u.x, u.y, 560, t => { dmg(u, t, S(u, 220, 28) + u.ap + u.maxHp * .05, 'm'); slow(t, .5, 1.5); fx('bolt', t.x, t.y, { x2: u.x, y2: u.y, c: '#fde047' }); }, '#fde047'); fx('nova', u.x, u.y, { r: 560, c: '#fde047' }); } }] }),
+      cast(u) { aoeNow(u, u.x, u.y, 560, t => { dmg(u, t, S(u, 240, 30) + u.ap + u.maxHp * .06, 'm'); slow(t, .5, 1.5); fx('bolt', t.x, t.y, { x2: u.x, y2: u.y, c: '#fde047' }); }, '#fde047'); fx('nova', u.x, u.y, { r: 560, c: '#fde047' }); } }] }),
   HD({ id: 'solin', name: '솔린', role: 'mage', color: '#fde68a', desc: '빛으로 묶고 멀리서 레이저를 쏘는 마법사', ab: [
     { n: '빛의 속박', cd: 11, desc: '빛 구체를 날려 최대 2명을 속박하고 피해를 줍니다.', ai: { t: 'shot', range: 1150, speed: 1300, w: 76 },
       cast(u, tx, ty) { const [dx, dy] = aimDir(u, tx, ty); proj({ owner: u, x: u.x, y: u.y, dx, dy, speed: 1300, range: 1150, r: 38, pierce: 2, color: '#fef08a', kind: 'orb', onHit(t) { dmg(u, t, S(u, 85, 27) + u.ap * .6, 'm'); root(t, 1.5); } }); } },
@@ -76,16 +76,16 @@ export const HEROES = [
     { n: '죽음의 연무', cd: 55, desc: '2.5초간 주변에 칼날 폭풍을 일으켜 매우 빠르게 피해를 줍니다.', ai: { t: 'self', r: 420 },
       cast(u) { buff(u, 'spin', 0, 2.5, { r: 450, tick: 0, int: .25, dmgF: () => S(u, 30, 7) + u.ad * .24, col: '#c084fc' }); } }] }),
   HD({ id: 'tera', name: '테라', role: 'support', color: '#f9a8d4', desc: '아군을 치유하고 적을 묶는 서포터',
-    passive: '자연의 가호: 기본 공격이 적을 0.8초간 20% 둔화',
-    onHit(u, t) { slow(t, .2, .8); }, ab: [
+    passive: '자연의 가호: 기본 공격이 적을 0.8초간 12% 둔화',
+    onHit(u, t) { slow(t, .12, .8); }, ab: [
     { n: '생명의 꽃', cd: 9, desc: '체력 비율이 가장 낮은 주변 아군(자신 포함)을 치유하고 이동 속도를 높여줍니다.', ai: { t: 'heal', range: 750, th: .65 },
-      cast(u) { const as = alliesIn(u.team, u.x, u.y, 750); if (!as.length) return false; as.sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp); const a = as[0]; heal(a, S(u, 78, 18) + u.ap * .5); buff(a, 'ms', .2, 1.5); fx('heal', a.x, a.y, { c: '#86efac' }); } },
+      cast(u) { const as = alliesIn(u.team, u.x, u.y, 750); if (!as.length) return false; as.sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp); const a = as[0]; heal(a, S(u, 64, 15) + u.ap * .5); buff(a, 'ms', .2, 1.5); fx('heal', a.x, a.y, { c: '#86efac' }); } },
     { n: '가시 덩굴', cd: 12, desc: '지정 위치에 덩굴을 솟아오르게 해 피해를 주고 속박합니다.', ai: { t: 'aoe', range: 900, r: 260, delay: .7, wc: 1 },
-      cast(u, tx, ty) { const [x, y] = clampPt(u, tx, ty, 900); zone({ owner: u, x, y, r: 260, delay: .7, color: '#86efac', vines: true, onTrigger(ts) { for (const t of ts) { dmg(u, t, S(u, 85, 26) + u.ap * .6, 'm'); root(t, 1.3); } } }); } },
+      cast(u, tx, ty) { const [x, y] = clampPt(u, tx, ty, 900); zone({ owner: u, x, y, r: 260, delay: .7, color: '#86efac', vines: true, onTrigger(ts) { for (const t of ts) { dmg(u, t, S(u, 85, 26) + u.ap * .6, 'm'); root(t, 1.1); } } }); } },
     { n: '바람의 축복', cd: 18, desc: '주변 아군의 이동 속도를 2초간 크게 높입니다.', ai: { t: 'engage', r: 700 },
       cast(u) { for (const a of alliesIn(u.team, u.x, u.y, 650)) { buff(a, 'ms', .35, 2); fx('aura', a.x, a.y, { c: '#bae6fd', follow: a.id, dur: 2 }); } } },
     { n: '대지의 숨결', cd: 70, desc: '넓은 범위의 아군을 크게 치유하고 주변 적에게 피해를 줍니다.', ai: { t: 'heal', range: 800, th: .45 },
-      cast(u) { for (const a of alliesIn(u.team, u.x, u.y, 850)) { heal(a, S(u, 155, 25) + u.ap * .6); fx('heal', a.x, a.y, { c: '#86efac' }); } aoeNow(u, u.x, u.y, 500, t => dmg(u, t, S(u, 140, 22) + u.ap * .4, 'm'), '#86efac'); fx('nova', u.x, u.y, { r: 850, c: '#86efac' }); } }] }),
+      cast(u) { for (const a of alliesIn(u.team, u.x, u.y, 850)) { heal(a, S(u, 132, 21) + u.ap * .6); fx('heal', a.x, a.y, { c: '#86efac' }); } aoeNow(u, u.x, u.y, 500, t => dmg(u, t, S(u, 140, 22) + u.ap * .4, 'm'), '#86efac'); fx('nova', u.x, u.y, { r: 850, c: '#86efac' }); } }] }),
   // 무기의 달인: 평타를 칠수록 빨라지고, 반격 태세로 평타를 흘려낸 뒤 주변을 기절시킴
   HD({ id: 'rokan', name: '로칸', role: 'fighter', color: '#5eead4', desc: '평타가 쌓일수록 강해지는 쇠봉의 달인',
     passive: '연속 공격: 기본 공격이 적중할 때마다 공격 속도 +5% (최대 8중첩, 2.5초 유지)',
@@ -246,7 +246,7 @@ function doAttack(u, dt) {
   moveToward(u, t.x, t.y, dt); return true;
 }
 function startAttack(u, t) {
-  u.atkCd = 1 / asOf(u); u.atkT = G.t; u.face = Math.atan2(t.y - u.y, t.x - u.x);
+  u.atkCd = 1 / asOf(u); u.atkT = G.t; u.lastAtkT = G.t; u.face = Math.atan2(t.y - u.y, t.x - u.x);
   if (u.kind === 'tower') { autoAttack(u, t); return; }
   u.wind = { t: windupTime(u), tgt: t };
 }
@@ -281,6 +281,7 @@ export function dmg(src, tg, amt, type, auto) {
   for (const s of tg.shields) { if (a <= 0) break; const k = Math.min(s.a, a); s.a -= k; a -= k; }
   if (tg.shields.length) tg.shields = tg.shields.filter(s => s.a > .5);
   tg.hp -= a; tg.lastDmgT = G.t; tg.hurtT = G.t;
+  if (src && tg.mobile && src.team !== tg.team) { tg.atkBy = src; tg.atkByT = G.t; } // 미니언 도움 요청용
   if (src && src.kind === 'hero' && tg.kind === 'hero') {
     G.stats[auto ? 'auto' : 'abil'] += shown;
     tg.lastHitBy[src.id] = G.t; src.lastDmgT = G.t;
@@ -366,14 +367,50 @@ export function cmd(h, c) {
 
 /* ================= AI ================= */
 function aiShop(u) { for (const id of BUILDS[u.hd.role]) { if (u.items.includes(id)) continue; if (u.items.length >= 6) break; const c = ITEMS[id].c; if (u.gold >= c) { u.gold -= c; u.items.push(id); } else break; } recalc(u); }
+/* ---- 미니언 AI: 롤 미니언 규칙을 따름 ----
+   - 0.25초마다 주변을 훑어 대상을 고름 (획득 범위 500)
+   - 우선순위: ① 아군 영웅을 공격한 적 영웅(도움 요청, 1000 범위) ② 아군 영웅을 공격한 적 미니언
+     ③ 아군 미니언을 공격한 적 미니언 ④ 아군 미니언을 공격한 적 포탑 ⑤ 가장 가까운 적 미니언
+     ⑥ 가장 가까운 적 영웅 ⑦ 구조물
+   - 지금 대상보다 순위가 "높을 때만" 바꿈 (같은 순위면 하던 대상 계속)
+   - 대상이 획득 범위 밖으로 멀리 벗어나거나, 4초 동안 한 번도 못 때리거나, 영웅을 잡은 자리에서 600 넘게 끌려가면 포기 → 라인으로 복귀
+   - 포탑을 치는 중이면 영웅끼리 싸우는 도움 요청은 무시 */
+const M_ACQ = 500, M_HELP = 1000, M_LEASH = 700, M_GIVEUP = 4, M_CHASE = 600;
+function minionSweep(u) {
+  const now = G.t; let best = null, bc = 99, bd = 1e9;
+  const consider = (e, c) => {
+    if (!targetable(u, e) || (u.ign && u.ign[e.id] > now)) return;
+    const d = dist(u, e); if (c < bc || (c === bc && d < bd)) { bc = c; bd = d; best = e; }
+  };
+  const onTower = u.target && !u.target.mobile && !u.target.dead;
+  for (const a of G.units) { // 도움 요청: 최근 0.5초 안에 공격받은 아군
+    if (a.dead || a.team !== u.team || !a.mobile || a === u || !a.atkBy || now - a.atkByT > .5) continue;
+    const att = a.atkBy; if (!att || att.dead || att.team === u.team) continue;
+    const dv = dist(u, a);
+    if (a.kind === 'hero') {
+      if (att.kind === 'hero') { if (!onTower && dv < M_HELP && dist(u, att) < M_HELP) consider(att, 1); }
+      else if (att.kind === 'minion' && dv < M_ACQ) consider(att, 2);
+    } else if (dv < M_ACQ) { if (att.kind === 'minion') consider(att, 3); else if (att.kind === 'tower') consider(att, 4); }
+  }
+  for (const e of G.units) { // 평소 탐색
+    if (e.dead || e.team === u.team) continue; if (dist(u, e) - e.r > M_ACQ) continue;
+    consider(e, e.kind === 'minion' ? 5 : e.kind === 'hero' ? 6 : 7);
+  }
+  return [best, bc];
+}
 function aiMinion(u, dt) {
+  const now = G.t;
+  if (u.target) {
+    const t = u.target; let ok = targetable(u, t) && !(u.ign && u.ign[t.id] > now);
+    if (ok && dist(u, t) - t.r > M_LEASH) ok = false; // 멀리 달아남
+    if (ok && t.kind === 'hero' && Math.hypot(u.x - u.ax, u.y - u.ay) > M_CHASE) { (u.ign || (u.ign = {}))[t.id] = now + 3; ok = false; } // 영웅을 잡은 자리에서 너무 멀리 끌려감 (롤의 금지 구역 대신)
+    if (ok && now - Math.max(u.acqT || 0, u.lastAtkT || -9) > M_GIVEUP) { (u.ign || (u.ign = {}))[t.id] = now + 4; ok = false; } // 4초간 못 때림
+    if (!ok) { u.target = null; u.tc = 99; u.aiT = 0; }
+  }
   u.aiT -= dt;
   if (u.aiT <= 0) {
-    u.aiT = .25; if (!targetable(u, u.target) || dist(u, u.target) > 750) {
-      let best = null, bd = 1e9, bp = 9;
-      for (const e of G.units) { if (e.dead || e.team === u.team) continue; const d = Math.hypot(e.x - u.x, e.y - u.y) - e.r; if (d > 560) continue; if (!e.mobile && !canHitStructure(e)) continue; const pr = e.kind === 'minion' ? 0 : e.mobile ? 2 : 1; if (pr < bp || (pr === bp && d < bd)) { bp = pr; bd = d; best = e; } }
-      u.target = best;
-    }
+    u.aiT = .25; const [b, c] = minionSweep(u);
+    if (b && (!u.target || c < u.tc)) { if (b !== u.target) { u.target = b; u.acqT = now; u.ax = u.x; u.ay = u.y; } u.tc = c; }
   }
   if (u.target) doAttack(u, dt); else { const f = u.team ? -1 : 1; u.face = u.team ? Math.PI : 0; moveToward(u, u.x + f * 300, u.laneY, dt); }
 }
@@ -459,7 +496,10 @@ function aiDecide(u, D) {
   for (const e of enemies) { const d = dist(u, e); if (d > u.range + u.r + e.r + 450) continue; const dive = e.hp / e.maxHp < .25 && hp > .5; if (inTw(e.x, e.y, 50) && !dive) continue; const sc = d * .5 + e.hp * .6; if (sc < best) { best = sc; tgt = e; } }
   let aggressive = false;
   if (tgt) {
-    const pw = team => G.heroes.filter(h => !h.dead && h.team === team && dist(h, tgt) < 1100).reduce((s, h) => s + h.hp + h.level * 40, 0);
+    // 전투력 = 근처 영웅 체력 + 근처 미니언 (적 미니언 사이에서 싸우면 도움 요청으로 집중 공격받음)
+    const minionW = 90 + G.t / 60 * 12;
+    const pw = team => G.heroes.filter(h => !h.dead && h.team === team && dist(h, tgt) < 1100).reduce((s, h) => s + h.hp + h.level * 40, 0)
+      + G.units.filter(m => m.kind === 'minion' && !m.dead && m.team === team && dist(m, team === u.team ? u : tgt) < 650).length * minionW;
     aggressive = pw(u.team) * (u.team === 1 ? D.agg : 1) >= pw(tgt.team) * .85 || (tgt.hp / tgt.maxHp < .3 && hp > .35);
   }
   if (myTw && !(tgt && tgt.hp / tgt.maxHp < .2)) { u.target = null; u.moveTo = { x: myTw.x - f * (myTw.range + 150), y: u.y }; if (eh) aiAbilities(u, D, eh, 'poke'); return; }

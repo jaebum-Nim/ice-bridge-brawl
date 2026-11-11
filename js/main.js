@@ -2,7 +2,7 @@
 import * as Sim from './sim.js';
 import { Renderer } from './render3d.js';
 import { Hud } from './hud.js';
-const { HEROES, HMAP, ROLE, DIFF, ITEMS, TEAMC, TEAMN, SELF_T, itemStats, cmd, inBase, targetable } = Sim;
+const { HEROES, HMAP, ROLE, DIFF, ITEMS, TEAMC, TEAMN, SELF_T, itemStats, cmd, canShop, targetable } = Sim;
 
 const glCv = document.getElementById('gl'), hudCv = document.getElementById('hud');
 let R = null, hud = null, G = null;
@@ -35,7 +35,7 @@ function handleEvents() {
       else if (e.k === 'heal' && e.team === p.team) addText(e.x, e.y, e.s, '#5ef08a');
     }
     else if (e.t === 'gold') { if (e.to === p.id) addText(e.x, e.y, e.s, '#facc15'); }
-    else if (e.t === 'lvl') { if (e.id === p.id) { addText(p.x, p.y, '레벨 업! ' + e.lv, '#fde68a', true); if (e.lv === 6) banner('궁극기(R)를 사용할 수 있습니다!', '#fde68a', 2.5); } }
+    else if (e.t === 'lvl') { if (e.id === p.id) { addText(p.x, p.y, '레벨 업! ' + e.lv, '#fde68a', true); if ([6, 11, 16].includes(e.lv)) banner(p.autoSkill ? '궁극기가 강해졌습니다!' : '궁극기를 찍을 수 있습니다 (+ 버튼 또는 Shift+R)', '#fde68a', 2.5); } }
     else if (e.t === 'kill') {
       const k = G.heroes.find(h => h.id === e.killer), v = G.heroes.find(h => h.id === e.victim);
       S.feed.unshift({ k: k ? hname(k) : '포탑/미니언', kc: TEAMC[v ? 1 - v.team : 0], v: v ? hname(v) : '?', vc: TEAMC[v ? v.team : 1], t: 7 }); if (S.feed.length > 6) S.feed.pop();
@@ -113,6 +113,7 @@ hudCv.addEventListener('contextmenu', e => e.preventDefault());
 hudCv.addEventListener('mousemove', e => { S.mx = e.clientX; S.my = e.clientY; if (S.rightDown && playing()) { const now = performance.now(); if (now - (S.dragT || 0) < 60) return; S.dragT = now; S.mouse = R.pick(S.mx, S.my); rightClick(true); } });
 hudCv.addEventListener('mousedown', e => {
   S.mx = e.clientX; S.my = e.clientY; if (!playing()) return; S.mouse = R.pick(S.mx, S.my); const p = G.player;
+  const hh = hud.hitTest(S.mx, S.my); if (hh) { if (hh.lvl !== undefined && e.button === 0) cmd(p, { c: 'lvl', i: hh.lvl }); return; }
   if (e.button === 2 || (e.button === 0 && S.aiming < 0 && !S.amove)) { S.rightDown = e.button === 2; S.pressX = S.mx; S.pressY = S.my; rightClick(false); S.pressTarget = !!G.player.target; return; }
   else if (e.button === 0) {
     if (S.aiming >= 0) { castNow(S.aiming); S.aiming = -1; }
@@ -128,6 +129,7 @@ window.addEventListener('keydown', e => {
   if (c === 'Escape') { if (S.shopOpen) closeShop(); else if (S.aiming >= 0) S.aiming = -1; else if (!G.over) S.paused = !S.paused; return; }
   if (c === 'KeyP' || c === 'KeyB') { if (S.shopOpen) closeShop(); else if (playing()) openShop(); return; }
   if (!playing()) return; const p = G.player;
+  if (c in KIDX && e.shiftKey) { e.preventDefault(); if (!e.repeat) cmd(p, { c: 'lvl', i: KIDX[c] }); return; }
   if (c in KIDX) { e.preventDefault(); if (e.repeat || p.dead) return; const i = KIDX[c]; if (SELF_T.includes(p.hd.ab[i].ai.t) || castMode === 'quick') { castNow(i); S.aiming = -1; } else S.aiming = i; return; }
   if (c === 'KeyD') cmd(p, { c: 'spell', k: 'D', x: S.mouse.x, y: S.mouse.y });
   else if (c === 'KeyF') { const pt = R.pickAt(S.mx, S.my, AIM_H); cmd(p, { c: 'spell', k: 'F', x: pt.x, y: pt.y }); }
@@ -142,11 +144,11 @@ window.addEventListener('keyup', e => {
 });
 
 /* ---------------- 상점 ---------------- */
-function openShop() { const p = G.player; if (!(p.dead || inBase(p))) { banner('기지에 있거나 사망했을 때만 구매할 수 있습니다', '#fca5a5', 1.8); return; } S.shopOpen = true; S.paused = true; renderShop(); $('shop').classList.remove('hidden'); }
+function openShop() { const p = G.player; if (!canShop(p)) { banner('상점은 죽었을 때 다시 열립니다 (기지를 떠나거나 공격받으면 닫힘)', '#fca5a5', 2.2); return; } S.shopOpen = true; S.paused = true; renderShop(); $('shop').classList.remove('hidden'); }
 function closeShop() { S.shopOpen = false; S.paused = false; $('shop').classList.add('hidden'); }
 function renderShop() {
   const p = G.player, el = $('shopIn');
-  let h = `<h2>상점 <span style="color:#facc15;font-size:18px;margin-left:8px">💰 ${Math.floor(p.gold)}</span></h2><p class="sub" style="margin:0">아이템을 눌러 구매하세요. 보유 아이템을 누르면 70% 가격에 판매합니다. (상점이 열려 있는 동안 게임이 멈춥니다)</p><div class="inv">`;
+  let h = `<h2>상점 <span style="color:#facc15;font-size:18px;margin-left:8px">💰 ${Math.floor(p.gold)}</span></h2><p class="sub" style="margin:0">아이템을 눌러 구매하세요. 보유 아이템을 누르면 70% 가격에 판매합니다. 칼바람 규칙: 기지를 떠나거나 공격받으면 상점은 다음에 죽을 때까지 닫힙니다. (상점이 열려 있는 동안 게임이 멈춥니다)</p><div class="inv">`;
   for (let i = 0; i < 6; i++) { const id = p.items[i]; h += id ? `<div class="slot f" data-sell="${i}"><b>${ITEMS[id].n}</b><br>판매 +${Math.floor(ITEMS[id].c * .7)}</div>` : `<div class="slot">빈 칸</div>`; }
   h += `</div><div class="items">`;
   for (const [id, it] of Object.entries(ITEMS)) { const own = p.items.includes(id), no = !own && (p.gold < it.c || p.items.length >= 6); h += `<div class="it ${own ? 'own' : no ? 'no' : ''}" data-buy="${id}"><b>${it.n}</b><span class="c">${it.c}G</span>${own ? ' · 보유 중' : ''}<div class="s">${itemStats(it)}</div></div>`; }
@@ -157,7 +159,8 @@ function renderShop() {
 }
 
 /* ---------------- 메뉴 ---------------- */
-const M = { mode: '1v1', hero: 'graff', enemy: 'random', diff: 1 };
+const M = { mode: '1v1', hero: 'graff', enemy: 'random', diff: 1, autoSkill: false };
+try { M.autoSkill = localStorage.getItem('ibb-autoskill') === '1'; } catch (e) { }
 function heroCards(sel, attr) {
   let h = '';
   for (const d of HEROES) h += `<div class="card ${sel === d.id ? 'sel' : ''}" data-${attr}="${d.id}"><div class="top"><div class="av" style="background:${d.color}">${d.name[0]}</div><div><b>${d.name}</b><div class="role">${ROLE[d.role]}</div></div></div><div class="d">${d.desc}</div>${d.passive ? `<div class="d" style="color:#a5b4fc">${d.passive}</div>` : ''}<ul>${d.ab.map((a, i) => `<li><span>${'QWER'[i]}</span>${a.n}</li>`).join('')}</ul></div>`;
@@ -177,13 +180,15 @@ function buildMenu() {
   <div class="row"><span class="lbl">AI 난이도</span><div class="seg">${DIFF.map((d, i) => `<button data-d="${i}" class="${M.diff === i ? 'on' : ''}">${d.name}</button>`).join('')}</div>
   <span class="lbl">그래픽</span><div class="seg">${[['high', '높음'], ['mid', '중간'], ['low', '낮음']].map(([k, n]) => `<button data-q="${k}" class="${quality === k ? 'on' : ''}">${n}</button>`).join('')}</div>
   </div><div class="row" style="margin-top:12px"><span class="lbl">스킬 시전</span><div class="seg">${[['normal', '일반 (키 → 클릭)'], ['quick', '빠른 시전 (키 즉시)'], ['release', '키 떼면 시전']].map(([k, n]) => `<button data-c="${k}" class="${castMode === k ? 'on' : ''}">${n}</button>`).join('')}</div>
+  <span class="lbl">스킬 찍기</span><div class="seg"><button data-s="0" class="${!M.autoSkill ? 'on' : ''}">직접 (+ 버튼 / Shift+키)</button><button data-s="1" class="${M.autoSkill ? 'on' : ''}">자동</button></div>
   <div style="flex:1"></div><button class="btn" id="go">게임 시작</button></div>
   <div id="menuErr" class="err"></div>
-  <div class="help"><b>조작법</b><br><kbd>우클릭</kbd>(또는 좌클릭) 이동·공격, 누른 채 끌면 계속 이동 &nbsp; <kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd><kbd>R</kbd> 스킬 (시전 방식은 위에서 선택, 조준 중 <kbd>우클릭</kbd>/<kbd>Esc</kbd> 취소) &nbsp; <kbd>D</kbd> 점멸 &nbsp; <kbd>F</kbd> 눈덩이 (맞춘 뒤 다시 <kbd>F</kbd>로 돌진)<br><kbd>A</kbd>+좌클릭 공격 이동 &nbsp; <kbd>S</kbd> 정지 &nbsp; <kbd>P</kbd> 상점 (기지 또는 사망 시) &nbsp; <kbd>Tab</kbd> 점수판 &nbsp; <kbd>←</kbd><kbd>→</kbd> 카메라, <kbd>Space</kbd> 복귀 &nbsp; <kbd>Esc</kbd> 일시정지<br>전투에서 벗어나면 체력이 천천히 차고, 다리 위 초록 구슬을 먹으면 즉시 회복됩니다. 적 분수대에 들어가면 순식간에 녹습니다. 화면이 버벅이면 그래픽을 '낮음'으로 바꿔보세요.</div></div>`;
+  <div class="help"><b>조작법</b><br><kbd>우클릭</kbd>(또는 좌클릭) 이동·공격, 누른 채 끌면 계속 이동 &nbsp; <kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd><kbd>R</kbd> 스킬 (시전 방식은 위에서 선택, 조준 중 <kbd>우클릭</kbd>/<kbd>Esc</kbd> 취소) &nbsp; <kbd>D</kbd> 점멸 &nbsp; <kbd>F</kbd> 눈덩이 (맞춘 뒤 다시 <kbd>F</kbd>로 돌진)<br><kbd>A</kbd>+좌클릭 공격 이동 &nbsp; <kbd>S</kbd> 정지 &nbsp; <kbd>P</kbd> 상점 (기지 또는 사망 시) &nbsp; <kbd>Tab</kbd> 점수판 &nbsp; <kbd>←</kbd><kbd>→</kbd> 카메라, <kbd>Space</kbd> 복귀 &nbsp; <kbd>Esc</kbd> 일시정지 &nbsp; <kbd>Shift</kbd>+<kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd><kbd>R</kbd> 스킬 레벨업<br><b>칼바람 규칙</b>: 분수대에서 회복되지 않고 체력은 아주 천천히만 찹니다. 다리 위 초록 구슬은 근처 아군 모두의 체력과 마나를 채웁니다. 상점은 기지를 떠나거나 공격받으면 다음에 죽을 때까지 닫힙니다. 적 분수대에 들어가면 순식간에 녹습니다. 화면이 버벅이면 그래픽을 '낮음'으로 바꿔보세요.</div></div>`;
   m.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { M.mode = b.dataset.mode; buildMenu(); });
   m.querySelectorAll('[data-h]').forEach(c => c.onclick = () => { M.hero = c.dataset.h; buildMenu(); });
   m.querySelectorAll('[data-e]').forEach(c => c.onclick = () => { M.enemy = c.dataset.e; buildMenu(); });
   m.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { M.diff = +b.dataset.d; buildMenu(); });
+  m.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { M.autoSkill = b.dataset.s === '1'; try { localStorage.setItem('ibb-autoskill', M.autoSkill ? '1' : '0'); } catch (e) { } buildMenu(); });
   m.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { castMode = b.dataset.c; try { localStorage.setItem('ibb-cast', castMode); } catch (e) { } buildMenu(); });
   m.querySelectorAll('[data-q]').forEach(b => b.onclick = () => { quality = b.dataset.q; try { localStorage.setItem('ibb-quality', quality); } catch (e) { } if (R) R.setQuality(quality); buildMenu(); });
   $('go').onclick = startGame;
@@ -193,7 +198,7 @@ function startGame() {
   $('menu').classList.add('hidden'); $('end').classList.add('hidden');
   Object.assign(S, { aiming: -1, amove: false, paused: false, shopOpen: false, camOff: 0, texts: [], feed: [], banner: null });
   R.reset();
-  G = Sim.newGame({ mode: M.mode, pick: M.hero, enemy: M.enemy, diff: M.diff });
+  G = Sim.newGame({ mode: M.mode, pick: M.hero, enemy: M.enemy, diff: M.diff, autoSkill: M.autoSkill });
   window.G = G; window.Sim = Sim; window.R = R; // 디버그/테스트용
   openShop();
 }

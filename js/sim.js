@@ -15,14 +15,15 @@ export function norm(dx, dy) { const d = Math.hypot(dx, dy); if (d < .001) retur
 function aimDir(u, tx, ty) { if (Math.abs(tx - u.x) < .001 && Math.abs(ty - u.y) < .001) return [u.team ? -1 : 1, 0]; return norm(tx - u.x, ty - u.y); }
 export function clampPt(u, tx, ty, r) { const dx = tx - u.x, dy = ty - u.y, d = Math.hypot(dx, dy); return d <= r ? [tx, ty] : [u.x + dx / d * r, u.y + dy / d * r]; }
 function clampMap(x, y, r) { return [clamp(x, 40, MAP_W - 40), clamp(y, LANE_Y1 + r * .6, LANE_Y2 - r * .6)]; }
-const S = (u, b, l) => b + l * (u.level - 1);
+// 스킬 수치: 스킬을 쓸 때는 그 스킬의 랭크로 환산한 레벨, 그 밖(패시브 등)에는 영웅 레벨 기준
+const S = (u, b, l) => b + l * ((u.curRankL ?? u.level) - 1);
 
 /* ================= 영웅 ================= */
 export const ROLE = { tank: '탱커', mage: '마법사', adc: '원거리 딜러', fighter: '전사', assassin: '암살자', support: '서포터' };
 const BASES = {
   tank: { hp: 770, hpL: 120, ad: 84, adL: 6.2, df: 33, dfL: 3, as: .68, asL: .022, ms: 340, range: 160 },
   mage: { hp: 555, hpL: 94, ad: 72, adL: 5.2, df: 16, dfL: 2.6, as: .66, asL: .02, ms: 330, range: 550 },
-  adc: { hp: 560, hpL: 95, ad: 80, adL: 5.6, df: 18, dfL: 2.6, as: .72, asL: .04, ms: 330, range: 550 },
+  adc: { hp: 570, hpL: 96, ad: 83, adL: 5.8, df: 18, dfL: 2.6, as: .72, asL: .04, ms: 330, range: 550 },
   fighter: { hp: 660, hpL: 108, ad: 88, adL: 6.6, df: 25, dfL: 3, as: .7, asL: .03, ms: 345, range: 185 },
   assassin: { hp: 640, hpL: 100, ad: 94, adL: 6.3, df: 25, dfL: 2.9, as: .72, asL: .036, ms: 350, range: 160 },
   support: { hp: 585, hpL: 98, ad: 70, adL: 5, df: 26, dfL: 2.6, as: .65, asL: .02, ms: 335, range: 525 }
@@ -30,23 +31,23 @@ const BASES = {
 function HD(o) { return Object.assign({}, BASES[o.role], o); }
 export const HEROES = [
   HD({ id: 'graff', name: '그라프', role: 'tank', color: '#a8b4c4', desc: '사슬로 적을 끌어와 묶는 탱커', ab: [
-    { n: '사슬 갈고리', cd: 14, desc: '사슬을 던져 처음 맞은 적에게 피해를 주고 내 앞으로 끌어와 기절시킵니다.', ai: { t: 'shot', range: 1050, speed: 1800, w: 68 },
-      cast(u, tx, ty) { const [dx, dy] = aimDir(u, tx, ty); proj({ owner: u, x: u.x, y: u.y, dx, dy, speed: 1800, range: 1050, r: 34, color: '#dbe3ee', kind: 'chain', onHit(t) { dmg(u, t, S(u, 80, 26) + u.ap * .9 + u.ad * .3, 'm'); const [nx, ny] = norm(t.x - u.x, t.y - u.y); dashTo(t, u.x + nx * (u.r + t.r + 10), u.y + ny * (u.r + t.r + 10), 2200, null, true); stun(t, .65); } }); } },
+    { n: '사슬 갈고리', cd: 15, desc: '사슬을 던져 처음 맞은 적에게 피해를 주고 내 앞으로 끌어와 기절시킵니다.', ai: { t: 'shot', range: 1050, speed: 1800, w: 68 },
+      cast(u, tx, ty) { const [dx, dy] = aimDir(u, tx, ty); proj({ owner: u, x: u.x, y: u.y, dx, dy, speed: 1800, range: 1050, r: 34, color: '#dbe3ee', kind: 'chain', onHit(t) { dmg(u, t, S(u, 70, 23) + u.ap * .9 + u.ad * .3, 'm'); const [nx, ny] = norm(t.x - u.x, t.y - u.y); dashTo(t, u.x + nx * (u.r + t.r + 10), u.y + ny * (u.r + t.r + 10), 2200, null, true); stun(t, .65); } }); } },
     { n: '과부하', cd: 16, desc: '3초간 이동 속도가 크게 오르고 보호막을 얻습니다.', ai: { t: 'engage', r: 850 },
-      cast(u) { buff(u, 'ms', .45, 3); shield(u, S(u, 70, 20) + u.maxHp * .1, 3); fx('ring', u.x, u.y, { r: 90, c: '#93c5fd' }); fx('aura', u.x, u.y, { c: '#93c5fd', follow: u.id, dur: 3 }); } },
+      cast(u) { buff(u, 'ms', .45, 3); shield(u, S(u, 60, 18) + u.maxHp * .08, 3); fx('ring', u.x, u.y, { r: 90, c: '#93c5fd' }); fx('aura', u.x, u.y, { c: '#93c5fd', follow: u.id, dur: 3 }); } },
     { n: '지면 강타', cd: 9, desc: '주변 적을 띄워 올리고 피해를 줍니다.', ai: { t: 'self', r: 260 },
-      cast(u) { aoeNow(u, u.x, u.y, 260, t => { dmg(u, t, S(u, 72, 24) + u.ad * .9, 'p'); stun(t, .75); t.airT = .75; }, '#cbd5e1'); fx('quake', u.x, u.y, { r: 260, c: '#cbd5e1' }); } },
+      cast(u) { aoeNow(u, u.x, u.y, 260, t => { dmg(u, t, S(u, 66, 22) + u.ad * .85, 'p'); stun(t, .75); t.airT = .75; }, '#cbd5e1'); fx('quake', u.x, u.y, { r: 260, c: '#cbd5e1' }); } },
     { n: '정전기장', cd: 70, desc: '넓은 범위에 전기 충격을 일으켜 큰 피해를 주고 둔화시킵니다.', ai: { t: 'self', r: 520 },
-      cast(u) { aoeNow(u, u.x, u.y, 560, t => { dmg(u, t, S(u, 240, 30) + u.ap + u.maxHp * .06, 'm'); slow(t, .5, 1.5); fx('bolt', t.x, t.y, { x2: u.x, y2: u.y, c: '#fde047' }); }, '#fde047'); fx('nova', u.x, u.y, { r: 560, c: '#fde047' }); } }] }),
+      cast(u) { aoeNow(u, u.x, u.y, 560, t => { dmg(u, t, S(u, 220, 28) + u.ap + u.maxHp * .05, 'm'); slow(t, .5, 1.5); fx('bolt', t.x, t.y, { x2: u.x, y2: u.y, c: '#fde047' }); }, '#fde047'); fx('nova', u.x, u.y, { r: 560, c: '#fde047' }); } }] }),
   HD({ id: 'solin', name: '솔린', role: 'mage', color: '#fde68a', desc: '빛으로 묶고 멀리서 레이저를 쏘는 마법사', ab: [
     { n: '빛의 속박', cd: 11, desc: '빛 구체를 날려 최대 2명을 속박하고 피해를 줍니다.', ai: { t: 'shot', range: 1150, speed: 1300, w: 76 },
-      cast(u, tx, ty) { const [dx, dy] = aimDir(u, tx, ty); proj({ owner: u, x: u.x, y: u.y, dx, dy, speed: 1300, range: 1150, r: 38, pierce: 2, color: '#fef08a', kind: 'orb', onHit(t) { dmg(u, t, S(u, 85, 27) + u.ap * .6, 'm'); root(t, 1.5); } }); } },
+      cast(u, tx, ty) { const [dx, dy] = aimDir(u, tx, ty); proj({ owner: u, x: u.x, y: u.y, dx, dy, speed: 1300, range: 1150, r: 38, pierce: 2, color: '#fef08a', kind: 'orb', onHit(t) { dmg(u, t, S(u, 78, 25) + u.ap * .6, 'm'); root(t, 1.5); } }); } },
     { n: '빛의 장막', cd: 14, desc: '자신과 주변 아군에게 보호막을 씌웁니다.', ai: { t: 'shieldAura', r: 550 },
       cast(u) { for (const a of alliesIn(u.team, u.x, u.y, 550)) { shield(a, S(u, 65, 16) + u.ap * .35, 2.5); fx('ring', a.x, a.y, { r: 70, c: '#fde68a' }); } } },
     { n: '광휘 지대', cd: 10, desc: '지정 위치에 빛을 떨어뜨려 잠시 후 폭발, 피해와 둔화를 줍니다.', ai: { t: 'aoe', range: 1000, r: 300, delay: .6, wc: 1 },
-      cast(u, tx, ty) { const [x, y] = clampPt(u, tx, ty, 1000); zone({ owner: u, x, y, r: 300, delay: .6, color: '#fde68a', onTrigger(ts) { for (const t of ts) { dmg(u, t, S(u, 80, 27) + u.ap * .7, 'm'); slow(t, .4, 1.5); } } }); } },
+      cast(u, tx, ty) { const [x, y] = clampPt(u, tx, ty, 1000); zone({ owner: u, x, y, r: 300, delay: .6, color: '#fde68a', onTrigger(ts) { for (const t of ts) { dmg(u, t, S(u, 78, 26) + u.ap * .7, 'm'); slow(t, .4, 1.5); } } }); } },
     { n: '섬광', cd: 50, desc: '잠시 후 아주 긴 직선 레이저를 발사해 맞은 모든 적에게 큰 피해를 줍니다.', ai: { t: 'line', range: 2800, delay: .8, w: 120 },
-      cast(u, tx, ty) { const [dx, dy] = aimDir(u, tx, ty); zone({ owner: u, line: true, x: u.x, y: u.y, x2: u.x + dx * 2800, y2: u.y + dy * 2800, w: 120, delay: .8, color: '#fff7ae', onTrigger(ts) { for (const t of ts) dmg(u, t, S(u, 295, 33) + u.ap, 'm'); } }); } }] }),
+      cast(u, tx, ty) { const [dx, dy] = aimDir(u, tx, ty); zone({ owner: u, line: true, x: u.x, y: u.y, x2: u.x + dx * 2800, y2: u.y + dy * 2800, w: 120, delay: .8, color: '#fff7ae', onTrigger(ts) { for (const t of ts) dmg(u, t, S(u, 270, 30) + u.ap, 'm'); } }); } }] }),
   HD({ id: 'kaira', name: '카이라', role: 'adc', color: '#bef264', desc: '화살로 견제하고 초장거리 저격을 하는 사수', ab: [
     { n: '신비한 화살', cd: 5, desc: '화살을 쏴 피해를 줍니다. 적중 시 다른 스킬 재사용 대기시간이 1초 줄어듭니다.', ai: { t: 'shot', range: 1150, speed: 2000, w: 56, wc: 1 },
       cast(u, tx, ty) { const [dx, dy] = aimDir(u, tx, ty); proj({ owner: u, x: u.x, y: u.y, dx, dy, speed: 2000, range: 1150, r: 28, color: '#d9f99d', kind: 'arrow', onHit(t) { dmg(u, t, S(u, 35, 16) + u.ad * 1.0, 'p'); for (let i = 1; i < 4; i++) u.cds[i] = Math.max(0, u.cds[i] - 1); } }); } },
@@ -62,15 +63,15 @@ export const HEROES = [
     { n: '인내', cd: 18, desc: '3초간 받는 피해가 40% 줄어듭니다.', ai: { t: 'dr' },
       cast(u) { buff(u, 'dr', .4, 3); fx('aura', u.x, u.y, { c: '#fbbf24', follow: u.id, dur: 3 }); } },
     { n: '회전베기', cd: 9, desc: '3초간 회전하며 주변 적에게 계속 피해를 줍니다.', ai: { t: 'self', r: 300, wc: 1 },
-      cast(u) { buff(u, 'spin', 0, 3, { r: 300, tick: 0, int: .5, dmgF: () => S(u, 16, 6) + u.ad * .38, col: '#fbbf24' }); } },
+      cast(u) { buff(u, 'spin', 0, 3, { r: 300, tick: 0, int: .5, dmgF: () => S(u, 15, 5.5) + u.ad * .35, col: '#fbbf24' }); } },
     { n: '심판', cd: 60, desc: '적 영웅 하나에게 잃은 체력에 비례한 고정 피해를 줍니다. 마무리용.', ai: { t: 'exec', range: 420 },
       est(u, t) { return S(u, 160, 22) + (t.maxHp - t.hp) * .33; },
       cast(u, tx, ty) { const t = pickTarget(u, tx, ty, 420, true); if (!t) return false; const a = this.est(u, t); fx('sword', t.x, t.y, { c: '#fde047' }); fx('ring', t.x, t.y, { r: 110, c: '#fde047' }); dmg(u, t, a, 't'); } }] }),
   HD({ id: 'niya', name: '니야', role: 'assassin', color: '#d8b4fe', desc: '파고들어 연속으로 베는 암살자', ab: [
     { n: '그림자 돌진', cd: 8, desc: '대상에게 순식간에 돌진해 피해를 줍니다. 대상을 처치하면 재사용 대기시간이 초기화됩니다.', ai: { t: 'target', range: 600 },
-      cast(u, tx, ty) { if (u.cc.root > 0) return false; const t = pickTarget(u, tx, ty, 600, false); if (!t) return false; dashTo(u, t.x, t.y, 2400, () => { if (t.dead) return; dmg(u, t, S(u, 85, 30) + u.ad * .9, 'p'); fx('slash', t.x, t.y, { c: '#d8b4fe', a: 0 }); if (t.dead) u.cds[0] = .2; }, false, t); } },
+      cast(u, tx, ty) { if (u.cc.root > 0) return false; const t = pickTarget(u, tx, ty, 600, false); if (!t) return false; dashTo(u, t.x, t.y, 2400, () => { if (t.dead) return; dmg(u, t, S(u, 92, 32) + u.ad * .9, 'p'); fx('slash', t.x, t.y, { c: '#d8b4fe', a: 0 }); if (t.dead) u.cds[0] = .2; }, false, t); } },
     { n: '칼날 폭풍', cd: 7, desc: '주변에 칼날을 흩뿌려 피해를 주고 둔화시킵니다.', ai: { t: 'self', r: 300, wc: 1 },
-      cast(u) { aoeNow(u, u.x, u.y, 300, t => { dmg(u, t, S(u, 60, 22) + u.ad * .65, 'p'); slow(t, .3, 1.2); }, '#d8b4fe'); fx('blades', u.x, u.y, { r: 300, c: '#d8b4fe' }); } },
+      cast(u) { aoeNow(u, u.x, u.y, 300, t => { dmg(u, t, S(u, 66, 24) + u.ad * .7, 'p'); slow(t, .3, 1.2); }, '#d8b4fe'); fx('blades', u.x, u.y, { r: 300, c: '#d8b4fe' }); } },
     { n: '순보', cd: 13, desc: '짧은 거리를 순간이동합니다.', ai: { t: 'dash', range: 420 },
       cast(u, tx, ty) { if (u.cc.root > 0) return false; const [x, y] = clampPt(u, tx, ty, 420); blink(u, x, y); } },
     { n: '죽음의 연무', cd: 55, desc: '2.5초간 주변에 칼날 폭풍을 일으켜 매우 빠르게 피해를 줍니다.', ai: { t: 'self', r: 420 },
@@ -79,7 +80,7 @@ export const HEROES = [
     passive: '자연의 가호: 기본 공격이 적을 0.8초간 12% 둔화',
     onHit(u, t) { slow(t, .12, .8); }, ab: [
     { n: '생명의 꽃', cd: 9, desc: '체력 비율이 가장 낮은 주변 아군(자신 포함)을 치유하고 이동 속도를 높여줍니다.', ai: { t: 'heal', range: 750, th: .65 },
-      cast(u) { const as = alliesIn(u.team, u.x, u.y, 750); if (!as.length) return false; as.sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp); const a = as[0]; heal(a, S(u, 64, 15) + u.ap * .5); buff(a, 'ms', .2, 1.5); fx('heal', a.x, a.y, { c: '#86efac' }); } },
+      cast(u) { const as = alliesIn(u.team, u.x, u.y, 750); if (!as.length) return false; as.sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp); const a = as[0]; heal(a, S(u, 58, 14) + u.ap * .5); buff(a, 'ms', .2, 1.5); fx('heal', a.x, a.y, { c: '#86efac' }); } },
     { n: '가시 덩굴', cd: 12, desc: '지정 위치에 덩굴을 솟아오르게 해 피해를 주고 속박합니다.', ai: { t: 'aoe', range: 900, r: 260, delay: .7, wc: 1 },
       cast(u, tx, ty) { const [x, y] = clampPt(u, tx, ty, 900); zone({ owner: u, x, y, r: 260, delay: .7, color: '#86efac', vines: true, onTrigger(ts) { for (const t of ts) { dmg(u, t, S(u, 85, 26) + u.ap * .6, 'm'); root(t, 1.1); } } }); } },
     { n: '바람의 축복', cd: 18, desc: '주변 아군의 이동 속도를 2초간 크게 높입니다.', ai: { t: 'engage', r: 700 },
@@ -87,19 +88,19 @@ export const HEROES = [
     { n: '대지의 숨결', cd: 70, desc: '넓은 범위의 아군을 크게 치유하고 주변 적에게 피해를 줍니다.', ai: { t: 'heal', range: 800, th: .45 },
       cast(u) { for (const a of alliesIn(u.team, u.x, u.y, 850)) { heal(a, S(u, 132, 21) + u.ap * .6); fx('heal', a.x, a.y, { c: '#86efac' }); } aoeNow(u, u.x, u.y, 500, t => dmg(u, t, S(u, 140, 22) + u.ap * .4, 'm'), '#86efac'); fx('nova', u.x, u.y, { r: 850, c: '#86efac' }); } }] }),
   // 무기의 달인: 평타를 칠수록 빨라지고, 반격 태세로 평타를 흘려낸 뒤 주변을 기절시킴
-  HD({ id: 'rokan', name: '로칸', role: 'fighter', color: '#5eead4', desc: '평타가 쌓일수록 강해지는 쇠봉의 달인',
+  HD({ id: 'rokan', name: '로칸', role: 'fighter', ad: 92, adL: 6.8, color: '#5eead4', desc: '평타가 쌓일수록 강해지는 쇠봉의 달인',
     passive: '연속 공격: 기본 공격이 적중할 때마다 공격 속도 +5% (최대 8중첩, 2.5초 유지)',
     onHit(u, t) {
       let b = u.buffs.find(x => x.type === 'as' && x.tag === 'rokan'); if (!b) { b = { type: 'as', tag: 'rokan', n: 0, v: 0, t: 2.5 }; u.buffs.push(b); }
       b.n = Math.min(8, b.n + 1); b.v = b.n * .05; b.t = 2.5;
-      u.hitN = (u.hitN || 0) + 1; if (u.level >= 6 && u.hitN % 3 === 0) { dmg(u, t, S(u, 55, 12) + u.ap * .6, 'm', true); fx('ring', t.x, t.y, { r: 70, c: '#5eead4' }); }
+      u.hitN = (u.hitN || 0) + 1; if (u.rank[3] > 0 && u.hitN % 3 === 0) { dmg(u, t, S(u, 55, 12) + u.ap * .6, 'm', true); fx('ring', t.x, t.y, { r: 70, c: '#5eead4' }); }
     }, ab: [
     { n: '도약 강타', cd: 10, desc: '대상에게 뛰어올라 내려찍으며 피해를 줍니다.', ai: { t: 'target', range: 700 },
       cast(u, tx, ty) { if (u.cc.root > 0) return false; const t = pickTarget(u, tx, ty, 700, false); if (!t) return false; dashTo(u, t.x, t.y, 2000, () => { if (t.dead) return; dmg(u, t, S(u, 65, 25) + AD(u) * .7, 'p'); fx('quake', t.x, t.y, { r: 140, c: '#5eead4' }); }, false, t); u.leapT = G.t; } },
     { n: '강화 타격', cd: 7, desc: '다음 기본 공격이 즉시 나가며 추가 마법 피해를 줍니다.', ai: { t: 'empower' },
       cast(u) { buff(u, 'emp', S(u, 45, 15) + AD(u) * .3 + u.ap * .6, 5, { slow: 0 }); u.atkCd = Math.min(u.atkCd, 0); fx('aura', u.x, u.y, { c: '#5eead4', follow: u.id, dur: .6 }); } },
     { n: '반격 태세', cd: 14, desc: '2초간 모든 기본 공격을 피합니다. 끝날 때 주변 적을 기절시키고, 피한 공격마다 피해가 20% 커집니다.', ai: { t: 'counter' },
-      cast(u) { buff(u, 'dodge', 0, 2, { n: 0, onEnd: (b) => { if (u.dead) return; const k = 1 + .2 * Math.min(5, b.n); aoeNow(u, u.x, u.y, 300, t => { dmg(u, t, (S(u, 45, 15) + AD(u) * .45) * k, 'p'); stun(t, 1); }, '#5eead4'); fx('quake', u.x, u.y, { r: 300, c: '#5eead4' }); } }); fx('aura', u.x, u.y, { c: '#99f6e4', follow: u.id, dur: 2 }); } },
+      cast(u) { buff(u, 'dodge', 0, 2, { n: 0, onEnd: (b) => { if (u.dead) return; const k = 1 + .2 * Math.min(5, b.n); aoeNow(u, u.x, u.y, 300, t => { dmg(u, t, (S(u, 52, 17) + AD(u) * .5) * k, 'p'); stun(t, 1); }, '#5eead4'); fx('quake', u.x, u.y, { r: 300, c: '#5eead4' }); } }); fx('aura', u.x, u.y, { c: '#99f6e4', follow: u.id, dur: 2 }); } },
     { n: '무기의 달인', cd: 70, desc: '8초간 방어력이 크게 오릅니다. (6레벨부터 세 번째 기본 공격마다 추가 마법 피해)', ai: { t: 'buffFight' },
       cast(u) { buff(u, 'def', S(u, 25, 4), 8); fx('aura', u.x, u.y, { c: '#5eead4', follow: u.id, dur: 8 }); fx('ring', u.x, u.y, { r: 120, c: '#5eead4' }); } }] }),
   // 학살자: 출혈을 쌓고, 원형 베기로 회복하며 버티고, 단두대로 마무리 (처치 시 초기화)
@@ -107,15 +108,23 @@ export const HEROES = [
     passive: '출혈: 공격과 스킬이 출혈을 1중첩(최대 5) 남겨 5초간 지속 피해. 영웅에게 5중첩이면 5초간 공격력이 크게 오름',
     onHit(u, t) { addBleed(u, t, u.buffs.some(b => b.tag === 'might') ? 5 : 1); }, ab: [
     { n: '원형 베기', cd: 9, desc: '잠시 후 도끼를 크게 휘두릅니다. 날 부분(바깥쪽)에 맞은 적은 큰 피해와 출혈을 입고, 맞힌 영웅 수만큼 체력을 회복합니다.', ai: { t: 'ring', r: 425 },
-      cast(u) { buff(u, 'ms', -.25, .75); zone({ owner: u, x: u.x, y: u.y, r: 425, inner: 205, follow: u, delay: .75, color: '#fb7185', axe: true, onTrigger(ts) { let heroes = 0; for (const t of ts) { const d = Math.hypot(t.x - u.x, t.y - u.y); if (d > 205) { dmg(u, t, S(u, 45, 18) + AD(u) * .85, 'p'); addBleed(u, t, 1); if (t.kind === 'hero') heroes++; } else dmg(u, t, (S(u, 45, 18) + AD(u) * .85) * .35, 'p'); } if (heroes) heal(u, (u.maxHp - u.hp) * .09 * heroes); } }); } },
+      cast(u) { buff(u, 'ms', -.25, .75); zone({ owner: u, x: u.x, y: u.y, r: 425, inner: 205, follow: u, delay: .75, color: '#fb7185', axe: true, onTrigger(ts) { let heroes = 0; for (const t of ts) { const d = Math.hypot(t.x - u.x, t.y - u.y); if (d > 205) { dmg(u, t, S(u, 52, 20) + AD(u) * .9, 'p'); addBleed(u, t, 1); if (t.kind === 'hero') heroes++; } else dmg(u, t, (S(u, 52, 20) + AD(u) * .9) * .35, 'p'); } if (heroes) heal(u, (u.maxHp - u.hp) * .11 * heroes); } }); } },
     { n: '절단 타격', cd: 6, desc: '다음 기본 공격이 즉시 나가며 추가 피해를 주고 적을 크게 둔화시킵니다.', ai: { t: 'empower' },
       cast(u) { buff(u, 'emp', AD(u) * .5, 5, { slow: .9 }); u.atkCd = Math.min(u.atkCd, 0); } },
     { n: '포획', cd: 18, desc: '앞쪽 부채꼴 범위의 적을 도끼로 끌어당기고 둔화시킵니다.', ai: { t: 'cone', range: 535 },
       cast(u, tx, ty) { const a0 = Math.atan2(ty - u.y, tx - u.x); let n = 0; for (const t of enemiesIn(u.team, u.x, u.y, 535)) { let da = Math.atan2(t.y - u.y, t.x - u.x) - a0; while (da > Math.PI) da -= Math.PI * 2; while (da < -Math.PI) da += Math.PI * 2; if (Math.abs(da) > .5 && Math.hypot(t.x - u.x, t.y - u.y) > u.r + t.r + 20) continue; const [nx, ny] = norm(t.x - u.x, t.y - u.y); dashTo(t, u.x + nx * (u.r + t.r + 40), u.y + ny * (u.r + t.r + 40), 1800, null, true); slow(t, .4, 1); n++; } fx('cone', u.x, u.y, { a: a0, r: 535, c: '#fb7185' }); } },
     { n: '단두대', cd: 60, desc: '적 영웅에게 뛰어올라 고정 피해를 줍니다. 출혈 중첩마다 피해 20% 증가, 처치하면 재사용 대기시간이 초기화됩니다.', ai: { t: 'exec', range: 460 },
-      est(u, t) { const n = t.bleed && t.bleed.src === u ? t.bleed.n : 0; return (S(u, 110, 22) + AD(u) * .7) * (1 + .2 * n); },
+      est(u, t) { const n = t.bleed && t.bleed.src === u ? t.bleed.n : 0; return (S(u, 120, 24) + AD(u) * .75) * (1 + .2 * n); },
       cast(u, tx, ty) { if (u.cc.root > 0) return false; const t = pickTarget(u, tx, ty, 460, true); if (!t) return false; const ab = this; dashTo(u, t.x, t.y, 2200, () => { if (t.dead) return; const a = ab.est(u, t); fx('sword', t.x, t.y, { c: '#fb7185' }); dmg(u, t, a, 't'); if (t.dead) { u.cds[3] = 0; ev({ t: 'banner', s: '단두대 초기화!', c: '#fb7185', d: 1.5, to: u.id }); } else addBleed(u, t, 1); }, false, t); u.leapT = G.t; } }] })
 ];
+// 마나: 니야·바르칸은 자원 없음. cost = [Q, W, E, R] 기본 소모 (Q·W·E는 랭크마다 +5)
+const MANA = {
+  graff: { mp: 320, mpL: 40, cost: [60, 50, 40, 100] }, solin: { mp: 400, mpL: 50, cost: [55, 60, 75, 100] },
+  kaira: { mp: 360, mpL: 45, cost: [30, 50, 90, 100] }, tera: { mp: 420, mpL: 50, cost: [60, 70, 60, 100] },
+  rokan: { mp: 360, mpL: 40, cost: [50, 25, 40, 0] }, braks: { mp: 320, mpL: 42, cost: [30, 30, 40, 80] }
+};
+const SKILL_ORDER = { valkan: [0, 2, 1], niya: [0, 1, 2], tera: [0, 1, 2], rokan: [0, 2, 1] }; // 나머지는 Q → E → W
+for (const h of HEROES) { const m = MANA[h.id]; h.mp = m ? m.mp : 0; h.mpL = m ? m.mpL : 0; h.cost = m ? m.cost : [0, 0, 0, 0]; h.order = SKILL_ORDER[h.id] || [0, 2, 1]; }
 export const HMAP = {}; HEROES.forEach(h => HMAP[h.id] = h);
 export const SELF_T = ['self', 'heal', 'shieldAura', 'engage', 'dr', 'empower', 'counter', 'buffFight', 'ring'];
 
@@ -126,10 +135,10 @@ export const ITEMS = {
   dagger: { n: '쾌속 단검', c: 900, as: .25 },
   bow: { n: '질풍의 활', c: 2600, ad: 35, as: .35 },
   great: { n: '파괴의 대검', c: 3000, ad: 75 },
-  tome: { n: '비전 마법서', c: 1100, ap: 45 },
+  tome: { n: '비전 마법서', c: 1100, ap: 40, mp: 250 },
   staff: { n: '심연의 지팡이', c: 3000, ap: 115 },
-  orb: { n: '시간의 구슬', c: 2500, ap: 70, ah: 20 },
-  hour: { n: '전장의 모래시계', c: 2700, ad: 35, ah: 20, hp: 250 },
+  orb: { n: '시간의 구슬', c: 2500, ap: 70, ah: 20, mp: 300 },
+  hour: { n: '전장의 모래시계', c: 2700, ad: 35, ah: 20, hp: 250, mp: 250 },
   belt: { n: '튼튼한 허리띠', c: 900, hp: 320 },
   heart: { n: '거인의 심장', c: 2900, hp: 750, df: 15 },
   plate: { n: '빙하 판금', c: 2500, df: 65, hp: 200 },
@@ -137,24 +146,26 @@ export const ITEMS = {
   scythe: { n: '흡혈의 낫', c: 2400, ad: 40, ls: .15 }
 };
 const BUILDS = { tank: ['boots', 'belt', 'heart', 'plate', 'scythe', 'hour'], mage: ['boots', 'tome', 'staff', 'orb', 'plate', 'heart'], adc: ['boots', 'dagger', 'bow', 'edge', 'scythe', 'great'], fighter: ['boots', 'sword', 'scythe', 'hour', 'heart', 'edge'], assassin: ['boots', 'sword', 'edge', 'great', 'scythe', 'plate'], support: ['boots', 'tome', 'orb', 'heart', 'plate', 'belt'] };
-export function itemStats(it) { const p = []; if (it.ad) p.push('공격력 +' + it.ad); if (it.ap) p.push('주문력 +' + it.ap); if (it.hp) p.push('체력 +' + it.hp); if (it.df) p.push('방어력 +' + it.df); if (it.as) p.push('공격 속도 +' + Math.round(it.as * 100) + '%'); if (it.ms) p.push('이동 속도 +' + it.ms); if (it.ah) p.push('스킬 가속 +' + it.ah); if (it.crit) p.push('치명타 확률 +' + Math.round(it.crit * 100) + '%'); if (it.ls) p.push('생명력 흡수 ' + Math.round(it.ls * 100) + '%'); return p.join(' · '); }
+export function itemStats(it) { const p = []; if (it.ad) p.push('공격력 +' + it.ad); if (it.ap) p.push('주문력 +' + it.ap); if (it.hp) p.push('체력 +' + it.hp); if (it.mp) p.push('마나 +' + it.mp); if (it.df) p.push('방어력 +' + it.df); if (it.as) p.push('공격 속도 +' + Math.round(it.as * 100) + '%'); if (it.ms) p.push('이동 속도 +' + it.ms); if (it.ah) p.push('스킬 가속 +' + it.ah); if (it.crit) p.push('치명타 확률 +' + Math.round(it.crit * 100) + '%'); if (it.ls) p.push('생명력 흡수 ' + Math.round(it.ls * 100) + '%'); return p.join(' · '); }
 
 /* ================= 상태 ================= */
 let UID = 1;
 export let G = null;
 function mkUnit(o) { const u = Object.assign({ id: UID++, vx: 0, vy: 0, hp: o.maxHp || 1, shields: [], cc: { stun: 0, root: 0, slows: [] }, buffs: [], atkCd: 0, dead: false, target: null, moveTo: null, lastHitBy: {}, def: 0, atkT: -9, castT: -9 }, o); u.hr = u.kind === 'hero' ? 58 : u.kind === 'minion' ? u.r + 8 : u.r; return u; }
 function mkHero(d, team, ctl) {
-  const u = mkUnit({ kind: 'hero', hd: d, team, ctl, isPlayer: ctl === 'local', mobile: true, name: d.name, r: 42, level: 3, xp: 0, gold: 1400, items: [], k: 0, d: 0, a: 0, cds: [0, 0, 0, 0], spellCd: { D: 0, F: 0 }, maxHp: 1, x: FOUNTAIN[team].x + (team ? -1 : 1) * rand(0, 90), y: MID_Y + rand(-150, 150), respawnT: 0, mark: null, yOff: rand(-230, 230), aiT: rand(0, .3), mk: { n: 0, t: -99 } });
-  recalc(u); u.hp = u.maxHp; return u;
+  const u = mkUnit({ kind: 'hero', hd: d, team, ctl, isPlayer: ctl === 'local', mobile: true, name: d.name, r: 42, level: 3, xp: 0, gold: 1400, items: [], k: 0, d: 0, a: 0, cds: [0, 0, 0, 0], spellCd: { D: 0, F: 0 }, maxHp: 1, x: FOUNTAIN[team].x + (team ? -1 : 1) * rand(0, 90), y: MID_Y + rand(-150, 150), respawnT: 0, mark: null, yOff: rand(-230, 230), aiT: rand(0, .3), mk: { n: 0, t: -99 }, rank: [0, 0, 0, 0], pts: 3, maxMana: 0, mana: 0, shopOpen: true, spawnT: 0 });
+  recalc(u); u.hp = u.maxHp; u.mana = u.maxMana; return u;
 }
 export function recalc(u) {
   const d = u.hd, L = u.level - 1, old = u.maxHp;
-  const s = { maxHp: d.hp + d.hpL * L, ad: d.ad + d.adL * L, ap: 0, def: d.df + d.dfL * L, ms: d.ms, range: d.range, ah: 0, crit: 0, ls: 0 };
+  const oldM = u.maxMana || 0;
+  const s = { maxHp: d.hp + d.hpL * L, ad: d.ad + d.adL * L, ap: 0, def: d.df + d.dfL * L, ms: d.ms, range: d.range, ah: 0, crit: 0, ls: 0, maxMana: d.mp ? d.mp + d.mpL * L : 0 };
   let asB = d.asL * L;
-  for (const id of u.items) { const it = ITEMS[id]; s.maxHp += it.hp || 0; s.ad += it.ad || 0; s.ap += it.ap || 0; s.def += it.df || 0; asB += it.as || 0; s.ms += it.ms || 0; s.ah += it.ah || 0; s.crit += it.crit || 0; s.ls += it.ls || 0; }
+  for (const id of u.items) { const it = ITEMS[id]; s.maxHp += it.hp || 0; s.ad += it.ad || 0; s.ap += it.ap || 0; s.def += it.df || 0; asB += it.as || 0; s.ms += it.ms || 0; s.ah += it.ah || 0; s.crit += it.crit || 0; s.ls += it.ls || 0; if (d.mp) s.maxMana += it.mp || 0; }
   s.as = Math.min(2.5, d.as * (1 + asB));
   Object.assign(u, s);
   if (old > 1) u.hp = clamp(u.hp + Math.max(0, u.maxHp - old), 1, u.maxHp);
+  if (oldM > 0) u.mana = clamp(u.mana + Math.max(0, u.maxMana - oldM), 0, u.maxMana);
 }
 function mkStruct(kind, team, x, y) {
   if (kind === 'tower') return mkUnit({ kind, team, x, y, mobile: false, maxHp: 2600, ad: 170, range: 750, as: .85, def: 25, r: 70 });
@@ -166,6 +177,24 @@ function mkMinion(k, team, x, y) {
   return mkUnit({ kind: 'minion', mk: k, team, x, y, mobile: true, maxHp: T.hp + mn * 28 * (k === 's' ? 2 : 1), ad: T.ad + mn * 2.5, def: mn * 1.5, range: T.range, as: T.as, r: T.r, ms: T.ms, gold: T.gold, xp: T.xp, laneY: y, aiT: 0 });
 }
 export function need(L) { return 180 + 60 * L; }
+// 스킬 레벨업 규칙 (롤과 같음): Q·W·E 최대 5랭크, n랭크는 영웅 레벨 2n-1부터 / R은 6·11·16레벨
+export function canLevel(u, i) {
+  if (!u.pts || u.pts <= 0) return false; const r = u.rank[i];
+  if (i === 3) return r < 3 && u.level >= [6, 11, 16][r];
+  return r < 5 && u.level >= 2 * r + 1;
+}
+export function levelSkill(u, i) { if (!canLevel(u, i)) return false; u.rank[i]++; u.pts--; return true; }
+function autoSkill(u) {
+  while (u.pts > 0) {
+    if (canLevel(u, 3)) { levelSkill(u, 3); continue; }
+    const fresh = [0, 1, 2].find(i => u.rank[i] === 0 && canLevel(u, i)); if (fresh !== undefined) { levelSkill(u, fresh); continue; }
+    const nxt = u.hd.order.find(i => canLevel(u, i)); if (nxt === undefined) break; levelSkill(u, nxt);
+  }
+}
+// 랭크를 '스킬 수치를 계산할 레벨'로 환산: Q·W·E는 1랭크=1레벨 … 5랭크=18레벨, R은 1/2/3랭크=6/11/16레벨
+export function rankLevel(u, i) { const r = u.rank[i]; return r <= 0 ? 1 : i === 3 ? 1 + 5 * r : 1 + (r - 1) * 4.25; }
+export function cdOf(u, i) { const r = Math.max(1, u.rank[i]), ab = u.hd.ab[i]; return ab.cd * (i === 3 ? 1 - .15 * (r - 1) : 1 - .06 * (r - 1)) * 100 / (100 + u.ah); }
+export function costOf(u, i) { const c = u.hd.cost[i]; return c ? c + (i < 3 ? 5 * (Math.max(1, u.rank[i]) - 1) : 0) : 0; }
 function heroesAlive(team) { return G.heroes.filter(h => !h.dead && h.team === team); }
 
 /* ================= 게임 생성 ================= */
@@ -191,7 +220,8 @@ export function newGame(opts) {
     shuffle(ids.slice()).slice(0, 5).forEach(i => G.heroes.push(mkHero(HMAP[i], 1, 'ai')));
   }
   G.units.push(...G.heroes);
-  for (const h of G.heroes) if (h.ctl === 'ai') aiShop(h);
+  for (const h of G.heroes) { if (h.ctl === 'ai') { aiShop(h); autoSkill(h); } }
+  if (opts.autoSkill) { G.player.autoSkill = true; autoSkill(G.player); }
   ev({ t: 'banner', s: mode === '1v1' ? '1대1 결투! 상대 넥서스를 파괴하세요' : '시작 아이템을 사고 다리 중앙으로!', c: '#e6eefc', d: 3 });
   return G;
 }
@@ -212,14 +242,15 @@ function alliesIn(team, x, y, r) { return G.heroes.filter(e => !e.dead && e.team
 function stun(t, d) { if (t.mobile && !t.dead) t.cc.stun = Math.max(t.cc.stun, d); }
 function root(t, d) { if (t.mobile && !t.dead) t.cc.root = Math.max(t.cc.root, d); }
 function slow(t, p, d) { if (t.mobile && !t.dead) t.cc.slows.push({ p, t: d }); }
-function buff(u, type, v, d, extra) { u.buffs.push(Object.assign({ type, v, t: d }, extra || {})); }
+function buff(u, type, v, d, extra) { u.buffs.push(Object.assign({ type, v, t: d, rl: u.curRankL }, extra || {})); }
 function shield(u, a, d) { u.shields.push({ a, t: d }); }
 function heal(u, a, quiet) { if (u.dead) return; const h = Math.min(a, u.maxHp - u.hp); u.hp += h; if (h > 5 && !quiet) ev({ t: 'text', x: u.x, y: u.y, s: '+' + Math.round(h), k: 'heal', team: u.team, to: u.id }); }
-function dashTo(u, x, y, speed, onEnd, forced, tgt) { [x, y] = clampMap(x, y, u.r); u.dash = { x, y, speed, onEnd, forced, tgt }; u.target = null; u.moveTo = null; }
+function dashTo(u, x, y, speed, onEnd, forced, tgt) { [x, y] = clampMap(x, y, u.r); u.dash = { x, y, speed, onEnd, forced, tgt, rl: u.curRankL }; u.target = null; u.moveTo = null; }
 function blink(u, x, y) { fx('blink', u.x, u.y, { c: u.hd ? u.hd.color : '#ffffff' }); [x, y] = clampMap(x, y, u.r); u.x = x; u.y = y; u.px = x; u.py = y; fx('blink', x, y, { c: '#ffffff' }); }
 function aoeNow(u, x, y, r, fn, c) { for (const t of enemiesIn(u.team, x, y, r)) fn(t); fx('ring', x, y, { r, c: c || '#ffffff', fill: 1 }); }
-function proj(o) { G.projs.push(Object.assign({ id: G.PID++, trav: 0, hit: new Set(), pierce: 1 }, o)); }
-function zone(o) { G.zones.push(Object.assign({ id: G.PID++, t: 0 }, o)); }
+function proj(o) { G.projs.push(Object.assign({ id: G.PID++, trav: 0, hit: new Set(), pierce: 1, rl: o.owner && o.owner.curRankL }, o)); }
+function withRank(u, rl, fn) { const prev = u.curRankL; u.curRankL = rl; try { fn(); } finally { u.curRankL = prev; } }
+function zone(o) { G.zones.push(Object.assign({ id: G.PID++, t: 0, rl: o.owner && o.owner.curRankL }, o)); }
 export function pickTarget(u, tx, ty, range, heroOnly) {
   if (u.castTid) { const t = G.units.find(e => e.id === u.castTid); if (t && targetable(u, t) && t.mobile && (!heroOnly || t.kind === 'hero') && Math.hypot(t.x - u.x, t.y - u.y) < range + t.hr) return t; }
   let best = null, bs = 1e9;
@@ -293,7 +324,7 @@ export function dmg(src, tg, amt, type, auto) {
 }
 function addXp(h, a) {
   if (h.level >= 18) return; h.xp += a;
-  while (h.level < 18 && h.xp >= need(h.level)) { h.xp -= need(h.level); h.level++; recalc(h); fx('levelup', h.x, h.y, { c: '#fde68a', follow: h.id }); ev({ t: 'lvl', id: h.id, lv: h.level }); }
+  while (h.level < 18 && h.xp >= need(h.level)) { h.xp -= need(h.level); h.level++; recalc(h); fx('levelup', h.x, h.y, { c: '#fde68a', follow: h.id }); h.pts++; if (h.ctl === 'ai' || h.autoSkill) autoSkill(h); ev({ t: 'lvl', id: h.id, lv: h.level }); }
 }
 function shareXp(team, x, y, amt) { const hs = G.heroes.filter(h => !h.dead && h.team === team && Math.hypot(h.x - x, h.y - y) < 1600); if (!hs.length) return; const each = amt / hs.length * (hs.length > 1 ? 1.25 : 1); for (const h of hs) addXp(h, each); }
 function kill(u, src) {
@@ -317,37 +348,42 @@ function kill(u, src) {
   if (u.kind === 'tower') { for (const h of G.heroes) if (h.team !== u.team) h.gold += 150; ev({ t: 'banner', s: TEAMN[u.team] + '의 포탑이 파괴되었습니다', c: TEAMC[1 - u.team], d: 2.4 }); fx('collapse', u.x, u.y, { c: TEAMC[u.team], dur: 1.2 }); return; }
   if (u.kind === 'nexus') { fx('collapse', u.x, u.y, { c: TEAMC[u.team], dur: 2, big: 1 }); G.over = true; G.winner = 1 - u.team; ev({ t: 'end', winner: 1 - u.team }); }
 }
-function respawn(u) { u.dead = false; const f = u.team ? -1 : 1; u.x = FOUNTAIN[u.team].x + f * rand(0, 80); u.y = MID_Y + rand(-120, 120); u.px = u.x; u.py = u.y; u.hp = u.maxHp; u.cc = { stun: 0, root: 0, slows: [] }; u.retreat = false; if (u.ctl === 'ai') aiShop(u); fx('ring', u.x, u.y, { r: 120, c: TEAMC[u.team] }); }
+function respawn(u) { u.dead = false; const f = u.team ? -1 : 1; u.x = FOUNTAIN[u.team].x + f * rand(0, 80); u.y = MID_Y + rand(-120, 120); u.px = u.x; u.py = u.y; u.hp = u.maxHp; u.cc = { stun: 0, root: 0, slows: [] }; u.retreat = false; u.mana = u.maxMana; u.shopOpen = true; u.spawnT = G.t; if (u.ctl === 'ai') aiShop(u); fx('ring', u.x, u.y, { r: 120, c: TEAMC[u.team] }); }
+export const SPELL_CD = { D: 176, F: 47 };
 export function useSpell(u, k, tx, ty) {
   u.fail = '';
   if (u.dead || u.cc.stun > 0 || u.dash) { u.fail = failWhy(u); return; }
-  if (k === 'D') { if (u.spellCd.D > 0) { u.fail = `점멸 재사용 대기 중 (${Math.ceil(u.spellCd.D)}초)`; return; } const [x, y] = clampPt(u, tx, ty, 425); blink(u, x, y); u.spellCd.D = 150; }
+  if (k === 'D') { if (u.spellCd.D > 0) { u.fail = `점멸 재사용 대기 중 (${Math.ceil(u.spellCd.D)}초)`; return; } const [x, y] = clampPt(u, tx, ty, 425); blink(u, x, y); u.spellCd.D = SPELL_CD.D; }
   if (k === 'F') {
-    if (u.mark && u.mark.t > 0 && !u.mark.tgt.dead) { if (u.cc.root > 0) return; const t = u.mark.tgt; u.mark = null; dashTo(u, t.x, t.y, 1900, () => fx('ring', u.x, u.y, { r: 90, c: '#e0f2fe' }), false, t); return; }
+    if (u.mark && u.mark.t > 0 && !u.mark.tgt.dead) { if (u.cc.root > 0) return; const t = u.mark.tgt; u.mark = null; u.spellCd.F = Math.max(0, u.spellCd.F - SPELL_CD.F * .25); dashTo(u, t.x, t.y, 1900, () => fx('ring', u.x, u.y, { r: 90, c: '#e0f2fe' }), false, t); return; }
     if (u.spellCd.F > 0) { u.fail = `눈덩이 재사용 대기 중 (${Math.ceil(u.spellCd.F)}초)`; return; } if (u.mark === null && u.cc.root > 0 && false) return; const [dx, dy] = aimDir(u, tx, ty);
-    proj({ owner: u, x: u.x, y: u.y, dx, dy, speed: 1500, range: 1600, r: 40, color: '#ffffff', kind: 'snow', onHit(t) { dmg(u, t, 10 + u.level * 5, 't'); u.mark = { tgt: t, t: 3 }; } }); u.spellCd.F = 40;
+    proj({ owner: u, x: u.x, y: u.y, dx, dy, speed: 1500, range: 1600, r: 40, color: '#ffffff', kind: 'snow', onHit(t) { dmg(u, t, 20 + u.level * 10, 't'); u.mark = { tgt: t, t: 3 }; } }); u.spellCd.F = SPELL_CD.F;
   }
 }
 function failWhy(u) { return u.dead ? '사망 중' : u.cc.stun > 0 ? '기절 상태' : u.dash ? '이동 중' : ''; }
 export function tryCast(u, i, tx, ty) {
   u.fail = '';
   if (u.dead || u.cc.stun > 0 || u.dash) { u.fail = failWhy(u); return false; }
-  if (i === 3 && u.level < 6) { u.fail = '궁극기는 6레벨부터'; return false; }
+  if (u.rank[i] <= 0) { u.fail = i === 3 && u.level < 6 ? '궁극기는 6레벨부터' : '아직 배우지 않은 스킬 (Shift+키 또는 + 버튼)'; return false; }
   if (u.cds[i] > 0) { u.fail = `재사용 대기 중 (${u.cds[i].toFixed(1)}초)`; return false; }
-  const ab = u.hd.ab[i]; const ok = ab.cast(u, tx, ty); if (ok === false) { u.fail = u.cc.root > 0 ? '속박 중에는 쓸 수 없음' : '사거리 안에 대상이 없음'; return false; }
-  u.cds[i] = ab.cd * 100 / (100 + u.ah); u.castT = G.t; u.castI = i;
+  const cost = costOf(u, i); if (cost > u.mana) { u.fail = `마나 부족 (${cost} 필요)`; return false; }
+  const ab = u.hd.ab[i]; u.curRankL = rankLevel(u, i); const ok = ab.cast(u, tx, ty); u.curRankL = undefined;
+  if (ok === false) { u.fail = u.cc.root > 0 ? '속박 중에는 쓸 수 없음' : '사거리 안에 대상이 없음'; return false; }
+  u.mana -= cost; u.cds[i] = cdOf(u, i); u.castT = G.t; u.castI = i;
   if (!SELF_T.includes(ab.ai.t)) u.face = Math.atan2(ty - u.y, tx - u.x);
   return true;
 }
 
 /* ================= 명령 (로컬 입력 / 원격 입력 공용) ================= */
 export function inBase(u) { return Math.abs(u.x - FOUNTAIN[u.team].x) < 700; }
+export function canShop(u) { return u.dead || u.shopOpen; }
 export function cmd(h, c) {
   if (!h || G.over) return;
   switch (c.c) {
     case 'move': if (h.dead) return; cancelWind(h); h.pend = null; h.target = null; h.moveTo = { x: c.x, y: c.y }; h.amove = false; break;
     case 'atk': { if (h.dead) return; const t = G.units.find(u => u.id === c.id); if (targetable(h, t)) { if (h.target !== t) cancelWind(h); h.pend = null; h.target = t; h.moveTo = null; h.amove = false; } break; }
     case 'amove': if (h.dead) return; cancelWind(h); h.pend = null; h.moveTo = { x: c.x, y: c.y }; h.amove = true; h.target = null; break;
+    case 'lvl': levelSkill(h, c.i); break;
     case 'stop': cancelWind(h); h.pend = null; h.target = null; h.moveTo = null; h.amove = false; break;
     case 'cast': {
       h.castTid = c.tid || 0;
@@ -360,8 +396,8 @@ export function cmd(h, c) {
       h.castTid = 0; break;
     }
     case 'spell': useSpell(h, c.k, c.x, c.y); if (h.fail) ev({ t: 'fail', to: h.id, s: h.fail }); break;
-    case 'buy': { const it = ITEMS[c.id]; if (!it || !(h.dead || inBase(h)) || h.items.includes(c.id) || h.gold < it.c || h.items.length >= 6) return; h.gold -= it.c; h.items.push(c.id); recalc(h); break; }
-    case 'sell': { if (!(h.dead || inBase(h))) return; const id = h.items[c.i]; if (!id) return; h.gold += Math.floor(ITEMS[id].c * .7); h.items.splice(c.i, 1); recalc(h); break; }
+    case 'buy': { const it = ITEMS[c.id]; if (!it || !canShop(h) || h.items.includes(c.id) || h.gold < it.c || h.items.length >= 6) return; h.gold -= it.c; h.items.push(c.id); recalc(h); break; }
+    case 'sell': { if (!canShop(h)) return; const id = h.items[c.i]; if (!id) return; h.gold += Math.floor(ITEMS[id].c * .7); h.items.splice(c.i, 1); recalc(h); break; }
   }
 }
 
@@ -441,7 +477,7 @@ function dodgeVec(u) {
 function aiAbilities(u, D, t, mode) {
   const abs = u.hd.ab;
   for (let i = 0; i < 4; i++) {
-    if (u.cds[i] > 0 || (i === 3 && u.level < 6)) continue;
+    if (u.cds[i] > 0 || u.rank[i] <= 0 || costOf(u, i) > u.mana) continue;
     const a = abs[i].ai; let c = false; const d = t && !t.dead ? dist(u, t) : 1e9;
     switch (a.t) {
       case 'shot': case 'line': case 'global': case 'aoe': {
@@ -458,7 +494,7 @@ function aiAbilities(u, D, t, mode) {
       case 'dr': if (d < 650 && u.hp / u.maxHp < .7) c = tryCast(u, i, u.x, u.y); break;
       case 'dash': { const f = u.team ? -1 : 1; if (mode === 'flee' && d < 600) c = tryCast(u, i, u.x - f * 500, u.y + rand(-150, 150)); else if (mode === 'fight' && t && t.hp / t.maxHp < .3 && d > u.range + 100 && d < u.range + a.range) c = tryCast(u, i, t.x, t.y); break; }
       case 'target': if (mode === 'fight' && t && d < a.range + t.r) c = tryCast(u, i, t.x, t.y); break;
-      case 'exec': if (t && d < a.range + t.r && abs[i].est(u, t) >= t.hp * .95) c = tryCast(u, i, t.x, t.y); break;
+      case 'exec': { let est = 0; if (t && d < a.range + t.r) withRank(u, rankLevel(u, i), () => { est = abs[i].est(u, t); }); if (est >= (t ? t.hp : 1e9) * .95) c = tryCast(u, i, t.x, t.y); break; }
       case 'empower': if (u.target && u.target.kind === 'hero' && inRange(u, u.target, 60) && mode !== 'flee') c = tryCast(u, i, u.x, u.y); break;
       case 'counter': if (t && d < 380 + (t.range > 300 ? 0 : 120)) c = tryCast(u, i, u.x, u.y); break;
       case 'buffFight': if (mode === 'fight' && t && d < 550) c = tryCast(u, i, u.x, u.y); break;
@@ -482,7 +518,8 @@ function aiDecide(u, D) {
   const inTw = (x, y, pad) => etw.find(s => Math.hypot(s.x - x, s.y - y) < s.range + (pad || 0));
   if (D.dodge > 0 && Math.random() < D.dodge) { const dv = dodgeVec(u); if (dv) { u.moveTo = { x: u.x + dv[0] * 180, y: u.y + dv[1] * 180 }; u.target = null; return; } }
   if ((hp < .3 && ehd < 1100) || hp < .18) u.retreat = true;
-  if (u.retreat && hp > .55) u.retreat = false;
+  u.retreatT = u.retreat ? (u.retreatT || 0) + D.react : 0;
+  if (u.retreat && (hp > .5 || (u.retreatT > 15 && hp > .3))) u.retreat = false;
   if (u.retreat) {
     if (eh && ehd < 480 && hp < .22 && u.spellCd.D <= 0 && G.diff + (u.team ? 0 : 1) > 0 && Math.random() < .6) useSpell(u, 'D', u.x - f * 500, u.y);
     if (eh) aiAbilities(u, D, eh, 'flee');
@@ -541,7 +578,7 @@ function tickStatus(u, dt) {
   if (u.airT) u.airT = Math.max(0, u.airT - dt);
   if (c.slows.length) { for (const s of c.slows) s.t -= dt; c.slows = c.slows.filter(s => s.t > 0); }
   if (u.shields.length) { for (const s of u.shields) s.t -= dt; u.shields = u.shields.filter(s => s.t > 0 && s.a > 0); }
-  if (u.buffs.length) { for (const b of u.buffs) { b.t -= dt; if (b.type === 'spin') { b.tick -= dt; if (b.tick <= 0) { b.tick += b.int; for (const t of enemiesIn(u.team, u.x, u.y, b.r)) dmg(u, t, b.dmgF(), 'p'); if (u.dead) return; } } } const ended = u.buffs.filter(b => b.t <= 0); u.buffs = u.buffs.filter(b => b.t > 0); for (const b of ended) if (b.onEnd) b.onEnd(b); }
+  if (u.buffs.length) { for (const b of u.buffs) { b.t -= dt; if (b.type === 'spin') { b.tick -= dt; if (b.tick <= 0) { b.tick += b.int; for (const t of enemiesIn(u.team, u.x, u.y, b.r)) withRank(u, b.rl, () => dmg(u, t, b.dmgF(), 'p')); if (u.dead) return; } } } const ended = u.buffs.filter(b => b.t <= 0); u.buffs = u.buffs.filter(b => b.t > 0); for (const b of ended) if (b.onEnd) withRank(u, b.rl, () => b.onEnd(b)); }
   if (u.bleed) { const bl = u.bleed; bl.t -= dt; bl.tick -= dt; if (bl.tick <= 0) { bl.tick += 1; const src = bl.src; dmg(src.dead ? null : src, u, (2 + src.level * .7 + AD(src) * .05) * bl.n, 'bleed', true); fx('hit', u.x, u.y, { c: '#e11d48' }); } if (bl.t <= 0 || u.dead) u.bleed = null; }
 }
 function doDash(u, dt) {
@@ -549,19 +586,21 @@ function doDash(u, dt) {
   if (d.tgt) { if (d.tgt.dead) { u.dash = null; return; } d.x = d.tgt.x; d.y = d.tgt.y; }
   const dx = d.x - u.x, dy = d.y - u.y, dd = Math.hypot(dx, dy), st = d.speed * dt, stop = d.tgt ? u.r + d.tgt.r : 0;
   if (!d.forced) u.face = Math.atan2(dy, dx);
-  if (dd - stop <= st) { if (dd > 1) { const k = Math.max(0, (dd - stop) / dd); u.x += dx * k; u.y += dy * k; } u.dash = null; if (d.onEnd) d.onEnd(); }
+  if (dd - stop <= st) { if (dd > 1) { const k = Math.max(0, (dd - stop) / dd); u.x += dx * k; u.y += dy * k; } u.dash = null; if (d.onEnd) withRank(u, d.rl, d.onEnd); }
   else { u.x += dx / dd * st; u.y += dy / dd * st; }
 }
 export function update(dt) {
   if (G.over) return;
   G.t += dt;
   if (G.t >= G.nextWave) { spawnWave(); G.nextWave += 25; }
-  for (const r of G.relics) { if (!r.on) { r.t -= dt; if (r.t <= 0) r.on = true; } else for (const h of G.heroes) { if (!h.dead && Math.hypot(h.x - r.x, h.y - r.y) < h.r + 40) { heal(h, h.maxHp * .22); r.on = false; r.t = 40; fx('heal', r.x, r.y, { c: '#86efac' }); break; } } }
+  for (const r of G.relics) { if (!r.on) { r.t -= dt; if (r.t <= 0) r.on = true; } else for (const h of G.heroes) { if (!h.dead && Math.hypot(h.x - r.x, h.y - r.y) < h.r + 40) { for (const a of G.heroes) if (!a.dead && a.team === h.team && Math.hypot(a.x - r.x, a.y - r.y) < 600) { heal(a, a.maxHp * .18); if (a.maxMana) a.mana = Math.min(a.maxMana, a.mana + a.maxMana * .15); } r.on = false; r.t = 40; fx('heal', r.x, r.y, { c: '#86efac' }); break; } } }
   for (const u of G.units) {
     if (u.kind === 'hero') {
       if (u.dead) { u.respawnT -= dt; if (u.respawnT <= 0) respawn(u); continue; }
       u.gold += 3.5 * dt; addXp(u, 4.5 * dt);
-      const ooc = G.t - (u.lastDmgT || -99) > 6; u.hp = Math.min(u.maxHp, u.hp + u.maxHp * (ooc ? .012 : .003) * dt);
+      u.hp = Math.min(u.maxHp, u.hp + u.maxHp * .003 * dt); // 칼바람: 기본 체력 재생만 (분수대·비전투 회복 없음)
+      if (u.maxMana) u.mana = Math.min(u.maxMana, u.mana + (2 + u.level * .25) * dt);
+      if (u.shopOpen && (!inBase(u) || (u.lastDmgT || -99) > u.spawnT)) u.shopOpen = false; // 기지를 떠나거나 맞으면 다음 사망까지 상점 닫힘
       for (let i = 0; i < 4; i++) u.cds[i] = Math.max(0, u.cds[i] - dt);
       u.spellCd.D = Math.max(0, u.spellCd.D - dt); u.spellCd.F = Math.max(0, u.spellCd.F - dt);
       if (u.mark) { u.mark.t -= dt; if (u.mark.t <= 0 || u.mark.tgt.dead) u.mark = null; }
@@ -589,7 +628,7 @@ function updateProjs(dt) {
     if (p.homing) { if (p.tgt.dead) { p.done = true; continue; } const dx = p.tgt.x - p.x, dy = p.tgt.y - p.y, d = Math.hypot(dx, dy), st = p.speed * dt; if (d <= st + p.tgt.r * .5) { p.done = true; p.cb(); } else { p.x += dx / d * st; p.y += dy / d * st; } continue; }
     const st = p.speed * dt, ox = p.x, oy = p.y; p.x += p.dx * st; p.y += p.dy * st; p.trav += st;
     const hs = p.shared || p.hit;
-    for (const e of G.units) { if (e.dead || !e.mobile || e.team === p.owner.team || hs.has(e.id)) continue; if (segDist(e.x, e.y, ox, oy, p.x, p.y) < p.r + e.hr) { hs.add(e.id); p.onHit(e); fx('hit', e.x, e.y, { c: p.color }); if (--p.pierce <= 0) { p.done = true; break; } } }
+    for (const e of G.units) { if (e.dead || !e.mobile || e.team === p.owner.team || hs.has(e.id)) continue; if (segDist(e.x, e.y, ox, oy, p.x, p.y) < p.r + e.hr) { hs.add(e.id); withRank(p.owner, p.rl, () => p.onHit(e)); fx('hit', e.x, e.y, { c: p.color }); if (--p.pierce <= 0) { p.done = true; break; } } }
     if (p.trav >= p.range || p.x < -200 || p.x > MAP_W + 200) p.done = true;
   }
   G.projs = G.projs.filter(p => !p.done);
@@ -600,7 +639,7 @@ function updateZones(dt) {
     z.t += dt; if (z.follow) { if (z.follow.dead) { z.fired = true; continue; } z.x = z.follow.x; z.y = z.follow.y; }
     if (z.t >= z.delay) {
       const ts = z.line ? G.units.filter(e => !e.dead && e.mobile && e.team !== z.owner.team && segDist(e.x, e.y, z.x, z.y, z.x2, z.y2) < z.w / 2 + e.hr) : enemiesIn(z.owner.team, z.x, z.y, z.r);
-      z.onTrigger(ts); z.fired = true;
+      withRank(z.owner, z.rl, () => z.onTrigger(ts)); z.fired = true;
       if (z.line) fx('beam', z.x, z.y, { x2: z.x2, y2: z.y2, c: z.color, w: z.w, dur: .6 }); else fx(z.vines ? 'vines' : z.axe ? 'axe' : 'burst', z.x, z.y, { r: z.r, c: z.color });
     }
   }

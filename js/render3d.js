@@ -108,6 +108,11 @@ export class Renderer {
   pick(sx, sy) {
     const v = new THREE.Vector2((sx / this.W) * 2 - 1, -(sy / this.H) * 2 + 1); this.ray.setFromCamera(v, this.cam);
     const p = new THREE.Vector3(); if (!this.ray.ray.intersectPlane(this.groundPlane, p)) return { x: 0, y: 0 };
+    const hA = this.world && this.world.heightAt;
+    if (hA) { // 협곡: 솟은 벽을 클릭하면 벽 표면 위치 (뒤쪽 바닥으로 뚫고 지나가지 않게)
+      const o = this.ray.ray.origin, d = this.ray.ray.direction, tEnd = o.distanceTo(p); let prev = 0;
+      for (let tt = Math.max(0, tEnd - 6); tt <= tEnd; tt += .08) { const x = o.x + d.x * tt, y = o.y + d.y * tt, z = o.z + d.z * tt; if (y <= hA(x, z)) { const t2 = (prev + tt) / 2; return { x: (o.x + d.x * t2) / K, y: (o.z + d.z * t2) / K }; } prev = tt; }
+    }
     return { x: p.x / K, y: p.z / K };
   }
   pickAt(sx, sy, h) {

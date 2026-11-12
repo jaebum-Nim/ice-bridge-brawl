@@ -483,9 +483,9 @@ export function cmd(h, c) {
   if (!h || G.over) return;
   switch (c.c) {
     case 'recall': if (h.dead || G.mode !== 'rift' || h.recall || h.dash || h.cc.stun > 0) return; cancelWind(h); h.pend = null; h.target = null; h.moveTo = null; h.recall = { t: RECALL_T }; break;
-    case 'move': if (h.dead) return; h.recall = null; cancelWind(h); h.pend = null; h.target = null; h.moveTo = { x: c.x, y: c.y }; h.amove = false; break;
+    case 'move': if (h.dead) return; h.recall = null; cancelWind(h); h.pend = null; h.target = null; { const [mx, my] = G.map.clampPt(c.x, c.y, h.r); h.moveTo = { x: mx, y: my }; } h.nav = null; h.amove = false; break;
     case 'atk': { if (h.dead) return; h.recall = null; const t = G.units.find(u => u.id === c.id); if (targetable(h, t)) { if (h.target !== t) cancelWind(h); h.pend = null; h.target = t; h.moveTo = null; h.amove = false; } break; }
-    case 'amove': if (h.dead) return; h.recall = null; cancelWind(h); h.pend = null; h.moveTo = { x: c.x, y: c.y }; h.amove = true; h.target = null; break;
+    case 'amove': if (h.dead) return; h.recall = null; cancelWind(h); h.pend = null; { const [mx, my] = G.map.clampPt(c.x, c.y, h.r); h.moveTo = { x: mx, y: my }; } h.nav = null; h.amove = true; h.target = null; break;
     case 'lvl': levelSkill(h, c.i); break;
     case 'stop': cancelWind(h); h.pend = null; h.target = null; h.moveTo = null; h.amove = false; break;
     case 'cast': {

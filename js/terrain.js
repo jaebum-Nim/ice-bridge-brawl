@@ -3,33 +3,44 @@ import * as THREE from 'three';
 
 export const RIFT_COL = { wall: '#2c4224', lane: '#8a7a5c', jungle: '#66713f', river: '#2f6f93', base: '#5b626e' };
 
+// 바닥 그림: 지형마다 잔무늬 타일(풀, 흙, 물, 돌판)을 만들어 반복 무늬로 채움 → 선명하고 빠름
 function paintGround(M, size) {
-  // 작은 캔버스에 모양을 그리고 크게 늘려서 가장자리를 부드럽게 (블러 필터는 느려서 안 씀)
-  const small = paintShapes(M, size / 4), cv = document.createElement('canvas'); cv.width = cv.height = size;
-  const g = cv.getContext('2d'); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high'; g.drawImage(small, 0, 0, size, size);
-  const k = size / M.W; let s = 7; const R = () => (s = (s * 16807) % 2147483647) / 2147483647;
-  for (let i = 0; i < 9000; i++) { g.fillStyle = R() < .5 ? 'rgba(255,255,255,.035)' : 'rgba(0,0,0,.05)'; g.fillRect(R() * size, R() * size, 2 * size / 2048, 2 * size / 2048); }
-  return cv;
-}
-function paintShapes(M, size) {
   const cv = document.createElement('canvas'); cv.width = cv.height = size;
-  const g = cv.getContext('2d'), k = size / M.W;
-  const poly = (pts, w, col) => { g.strokeStyle = col; g.lineWidth = w * k; g.lineCap = g.lineJoin = 'round'; g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x * k, y * k) : g.moveTo(x * k, y * k)); g.stroke(); };
-  const circ = (x, y, r, col) => { g.fillStyle = col; g.beginPath(); g.arc(x * k, y * k, r * k, 0, 7); g.fill(); };
-  g.fillStyle = RIFT_COL.wall; g.fillRect(0, 0, size, size);
-  // 숲 바닥 얼룩
-  let s = 11; const R = () => (s = (s * 16807) % 2147483647) / 2147483647;
-  for (let i = 0; i < 900; i++) { g.fillStyle = R() < .5 ? 'rgba(60,90,45,.35)' : 'rgba(20,35,18,.35)'; g.beginPath(); g.arc(R() * size, R() * size, (8 + R() * 30) * size / 2048, 0, 7); g.fill(); }
-  // 정글 길·캠프
-  for (const p of M.paths) poly(p, 440, RIFT_COL.jungle);
-  for (const c of M.camps) circ(c.x, c.y, 410, RIFT_COL.jungle);
-  // 강
-  poly(M.river, 640, RIFT_COL.river); poly(M.river, 360, '#3a82ab');
-  // 라인
-  for (const L of Object.values(M.lanes)) poly(L.pts, 640, RIFT_COL.lane);
-  for (const L of Object.values(M.lanes)) poly(L.pts, 300, '#978666');
-  // 기지
-  M.fountain.forEach((f, t) => { const b = t ? [M.W - 700, M.H - 6300] : [700, 6300]; circ(b[0], b[1], 1180, RIFT_COL.base); circ(f.x, f.y, 330, t ? '#7a3b3b' : '#33557f'); });
+  const g = cv.getContext('2d'), k = size / M.W, px = size / 4096, TS = 1024;
+  let sd = 11; const R = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+  const strokePoly = (c, pts, w) => { c.lineWidth = w * k; c.lineCap = c.lineJoin = 'round'; c.beginPath(); pts.forEach(([x, y], i) => i ? c.lineTo(x * k, y * k) : c.moveTo(x * k, y * k)); c.stroke(); };
+  const circle = (c, x, y, r) => { c.beginPath(); c.arc(x * k, y * k, r * k, 0, 7); c.fill(); };
+  // 잔무늬 도우미 (색깔별로 한 경로에 모아 그림). 타일 가장자리를 넘는 건 반대편에도 그려 이음새를 없앰
+  const wrap = (c, fn) => { for (const ox of [0, -TS, TS]) for (const oy of [0, -TS, TS]) { c.save(); c.translate(ox, oy); fn(); c.restore(); } };
+  const speck = (c, n, cols, r0, r1) => { for (const col of cols) { const pts = []; for (let i = 0; i < n / cols.length; i++) pts.push([R() * TS, R() * TS, r0 + R() * (r1 - r0), .5 + R() * .5, R() * 3]); c.fillStyle = col; wrap(c, () => { c.beginPath(); for (const [x, y, a, e, r] of pts) { c.moveTo(x + a, y); c.ellipse(x, y, a, a * e, r, 0, 6.29); } c.fill(); }); } };
+  const blades = (c, n, cols, len) => { c.lineCap = 'round'; for (const col of cols) for (const w of [1.3, 2.2]) { const pts = []; for (let i = 0; i < n / cols.length / 2; i++) { const a = -Math.PI / 2 + (R() - .5) * 1.2, l = len * .5 + R() * len; pts.push([R() * TS, R() * TS, Math.cos(a) * l, Math.sin(a) * l]); } c.strokeStyle = col; c.lineWidth = w; wrap(c, () => { c.beginPath(); for (const [x, y, dx, dy] of pts) { c.moveTo(x, y); c.lineTo(x + dx, y + dy); } c.stroke(); }); } };
+  const tile = (base, fn) => { const t = document.createElement('canvas'); t.width = t.height = TS; const c = t.getContext('2d'); c.fillStyle = base; c.fillRect(0, 0, TS, TS); fn(c); return g.createPattern(t, 'repeat'); };
+  const forest = tile('#1f301b', c => speck(c, 160, ['rgba(40,62,32,.6)', 'rgba(14,24,12,.6)'], 20, 70));
+  const grass = tile('#56683a', c => { speck(c, 140, ['rgba(90,110,55,.45)', 'rgba(60,75,38,.45)', 'rgba(110,105,60,.3)'], 15, 60); blades(c, 4400, ['#6f8447', '#4c5f30', '#83955a', '#5e7039', '#3f5228'], 9); speck(c, 100, ['rgba(130,115,80,.5)', 'rgba(70,60,40,.4)'], 2, 5); });
+  const dirt = tile('#8f7a57', c => { speck(c, 160, ['rgba(160,140,100,.18)', 'rgba(110,92,64,.18)', 'rgba(125,108,78,.2)'], 10, 40); speck(c, 900, ['#7b6a50', '#a8977a', '#6a5a43', '#b5a789', '#8a8a86'], 1.5, 5); });
+  const water = tile('#25597a', c => { c.lineCap = 'round'; for (const al of [.09, .15, .21]) { const pts = []; for (let i = 0; i < 60; i++) pts.push([R() * TS, R() * TS, 8 + R() * 22]); c.strokeStyle = `rgba(200,230,245,${al})`; c.lineWidth = 1.5; wrap(c, () => { c.beginPath(); for (const [x, y, l] of pts) { c.moveTo(x - l, y); c.quadraticCurveTo(x, y - 4, x + l, y); } c.stroke(); }); } });
+  const stone = tile('#6a6f78', c => { const T = 120 * k / px; for (let x = 0; x < TS; x += T) for (let y = 0; y < TS; y += T) { c.fillStyle = `rgba(${R() < .5 ? '255,255,255' : '0,0,0'},${R() * .07})`; c.fillRect(x + 1, y + 1, T - 2, T - 2); } c.strokeStyle = 'rgba(40,44,52,.55)'; c.lineWidth = 2; for (let x = 0; x <= TS; x += T) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, TS); c.stroke(); c.beginPath(); c.moveTo(0, x); c.lineTo(TS, x); c.stroke(); } });
+  if (px !== 1) for (const p of [forest, grass, dirt, water, stone]) p.setTransform(new DOMMatrix().scale(px));
+  const fill = (pat, shape) => { g.fillStyle = g.strokeStyle = pat; shape(); };
+
+  // 1) 숲 바닥 → 2) 길 가장자리 그늘
+  g.fillStyle = forest; g.fillRect(0, 0, size, size);
+  g.strokeStyle = g.fillStyle = 'rgba(10,16,8,.45)'; for (const p of M.paths) strokePoly(g, p, 560); for (const cp of M.camps) circle(g, cp.x, cp.y, 470); for (const L of Object.values(M.lanes)) strokePoly(g, L.pts, 760); strokePoly(g, M.river, 760);
+  // 3) 정글 풀밭
+  fill(grass, () => { for (const p of M.paths) strokePoly(g, p, 440); for (const cp of M.camps) circle(g, cp.x, cp.y, 410); });
+  // 4) 강: 물가 → 물(가운데 밝게) → 물가 거품
+  g.strokeStyle = '#6d6a4c'; strokePoly(g, M.river, 690);
+  fill(water, () => strokePoly(g, M.river, 620));
+  g.strokeStyle = 'rgba(70,140,185,.35)'; strokePoly(g, M.river, 470); g.strokeStyle = 'rgba(90,160,200,.3)'; strokePoly(g, M.river, 300);
+  g.strokeStyle = 'rgba(225,240,245,.18)'; g.lineWidth = 6 * px; g.setLineDash([14 * px, 10 * px]); for (const off of [-1, 1]) { g.beginPath(); M.river.forEach(([x, y], i) => { const X = (x + off * 216) * k, Y = (y - off * 216) * k; i ? g.lineTo(X, Y) : g.moveTo(X, Y); }); g.stroke(); } g.setLineDash([]);
+  // 5) 라인: 풀과 섞인 가장자리 → 흙길 → 가운데 밝은 띠, 바퀴 자국
+  g.strokeStyle = '#6f6a45'; for (const L of Object.values(M.lanes)) strokePoly(g, L.pts, 630);
+  fill(dirt, () => { for (const L of Object.values(M.lanes)) strokePoly(g, L.pts, 580); });
+  g.strokeStyle = 'rgba(180,160,120,.3)'; for (const L of Object.values(M.lanes)) strokePoly(g, L.pts, 260);
+  g.strokeStyle = 'rgba(80,66,46,.25)'; g.lineWidth = 3 * px; for (const L of Object.values(M.lanes)) for (const off of [-90, 90]) { g.beginPath(); L.pts.forEach(([x, y], i) => { const X = (x + off * .7) * k, Y = (y + off * .7) * k; i ? g.lineTo(X, Y) : g.moveTo(X, Y); }); g.stroke(); }
+  // 6) 기지 돌판 + 팀 색 분수대
+  fill(stone, () => M.fountain.forEach((f, tm) => { const b = tm ? [M.W - 700, M.H - 6300] : [700, 6300]; circle(g, b[0], b[1], 1170); }));
+  M.fountain.forEach((f, tm) => { g.fillStyle = tm ? '#5e2c33' : '#22406a'; circle(g, f.x, f.y, 360); g.fillStyle = tm ? '#9b4a52' : '#3b6db0'; circle(g, f.x, f.y, 300); g.strokeStyle = 'rgba(255,255,255,.35)'; g.lineWidth = 4 * px; g.beginPath(); g.arc(f.x * k, f.y * k, 230 * k, 0, 7); g.stroke(); });
   return cv;
 }
 
@@ -40,21 +51,19 @@ export function buildRiftTerrain(group, M, K, maxAniso = 4) {
   const F = new Float32Array(N * N);
   for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) { let a = 0; for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) a += wall(x + dx, z + dz) * (dx || dz ? 1 : 2); F[z * N + x] = a / 10; }
   const f = (x, z) => F[Math.max(0, Math.min(N - 1, z)) * N + Math.max(0, Math.min(N - 1, x))];
+  const heightAt = (wx, wz) => { const gx = wx / W * N - .5, gz = wz / W * N - .5, x0 = Math.floor(gx), z0 = Math.floor(gz), tx = gx - x0, tz = gz - z0;
+    const v = (f(x0, z0) * (1 - tx) + f(x0 + 1, z0) * tx) * (1 - tz) + (f(x0, z0 + 1) * (1 - tx) + f(x0 + 1, z0 + 1) * tx) * tz;
+    const t = Math.max(0, Math.min(1, (v - .45) / .3)), h = t * t * (3 - 2 * t); return h * 1.5 + h * Math.sin(gx * 1.7) * Math.cos(gz * 1.3) * .15; };
   const S = N * 3, geo = new THREE.PlaneGeometry(W, W, S, S); geo.rotateX(-Math.PI / 2); geo.translate(W / 2, 0, W / 2);
   const pos = geo.attributes.position;
-  for (let i = 0; i < pos.count; i++) {
-    const gx = pos.getX(i) / W * N - .5, gz = pos.getZ(i) / W * N - .5, x0 = Math.floor(gx), z0 = Math.floor(gz), tx = gx - x0, tz = gz - z0;
-    const v = (f(x0, z0) * (1 - tx) + f(x0 + 1, z0) * tx) * (1 - tz) + (f(x0, z0 + 1) * (1 - tx) + f(x0 + 1, z0 + 1) * tx) * tz;
-    const t = Math.max(0, Math.min(1, (v - .45) / .3)), h = t * t * (3 - 2 * t);
-    pos.setY(i, h * 1.5 + h * Math.sin(gx * 1.7) * Math.cos(gz * 1.3) * .15);
-  }
+  for (let i = 0; i < pos.count; i++) pos.setY(i, heightAt(pos.getX(i), pos.getZ(i)));
   geo.computeVertexNormals();
   // 경사면은 바위색, 꼭대기는 이끼색 (바닥 그림에 곱해짐)
   const nrm = geo.attributes.normal, col = new Float32Array(pos.count * 3);
   for (let i = 0; i < pos.count; i++) { const y = pos.getY(i), ny = nrm.getY(i), steep = Math.max(0, Math.min(1, (0.93 - ny) * 3)) * (y > .05 ? 1 : 0); const top = Math.min(1, y / 1.3);
     col[i * 3] = 1 + steep * .55 - top * .05; col[i * 3 + 1] = 1 + steep * .2 + top * .08; col[i * 3 + 2] = 1 + steep * .25 - top * .1; }
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  const tex = new THREE.CanvasTexture(paintGround(M, 2048)); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = maxAniso;
+  const tex = new THREE.CanvasTexture(paintGround(M, 4096)); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = maxAniso;
   const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ map: tex, vertexColors: true })); group.add(mesh);
   // 벽 위 나무 (낮은 다각형 원뿔, 한 번에 그림)
   const trees = []; let sd = 5; const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
@@ -69,5 +78,5 @@ export function buildRiftTerrain(group, M, K, maxAniso = 4) {
   // 맵 바깥
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(W + 120, W + 120), new THREE.MeshLambertMaterial({ color: 0x33482a })); floor.rotation.x = -Math.PI / 2; floor.position.set(W / 2, 1.45, W / 2); floor.renderOrder = -1;
   const ring = new THREE.Mesh(new THREE.RingGeometry(W * .72, W * 1.6, 4, 1), floor.material); ring.rotation.x = -Math.PI / 2; ring.rotation.z = Math.PI / 4; ring.position.set(W / 2, 1.45, W / 2); group.add(ring);
-  return { group, update: () => { } };
+  return { group, heightAt, update: () => { } };
 }

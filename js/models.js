@@ -167,3 +167,33 @@ export function buildNexus(team, tc) {
   const alive = g.children.filter(c => c !== rubble);
   return { g, crystal: cr, glow, rubble, alive };
 }
+
+/* ---------- 정글 몬스터 (블록 느낌) ---------- */
+// type: blue(푸른 정령) red(붉은 골렘) wolf toad / small: 새끼
+export function buildMonster(type, big) {
+  const g = new THREE.Group(), body = new THREE.Group(); g.add(body); const R = { g, body };
+  if (type === 'blue' || type === 'red') {
+    const c = type === 'blue' ? 0x3b82f6 : 0xdc2626, st = mat(type === 'blue' ? 0x64748b : 0x57534e), core = emis(c);
+    body.add(M(box(.7, .7, .6), st, 0, .75, 0)); body.add(M(box(.4, .35, .4), st, .12, 1.3, 0));
+    body.add(M(box(.12, .1, .3), core, .33, 1.33, 0, false));
+    const armL = M(box(.22, .6, .22), st, 0, .7, .48), armR = M(box(.22, .6, .22), st, 0, .7, -.48); body.add(armL, armR); R.armR = armR; R.armL = armL;
+    body.add(M(box(.24, .4, .24), st, 0, .2, .2), M(box(.24, .4, .24), st, 0, .2, -.2));
+    const cr = M(new THREE.OctahedronGeometry(.22, 0), core, 0, 1.75, 0, false); body.add(cr); cr.add(glowSprite(c, 1.4, .8)); R.orb = cr;
+    g.scale.setScalar(1.15);
+  } else if (type === 'wolf') {
+    const fur = mat(big ? 0x9ca3af : 0xcbd5e1), dk = mat(0x374151), eye = emis(0x93c5fd);
+    body.add(M(box(.75, .32, .32), fur, 0, .45, 0)); body.add(M(box(.3, .28, .28), fur, .48, .58, 0)); body.add(M(box(.16, .12, .16), dk, .66, .52, 0));
+    body.add(M(box(.06, .06, .06), eye, .62, .66, .09, false), M(box(.06, .06, .06), eye, .62, .66, -.09, false));
+    body.add(M(cone(.06, .14, 4), fur, .44, .78, .09), M(cone(.06, .14, 4), fur, .44, .78, -.09));
+    const legL = M(box(.1, .3, .1), dk, .25, .15, .11), legR = M(box(.1, .3, .1), dk, -.25, .15, -.11); body.add(legL, legR, M(box(.1, .3, .1), dk, .25, .15, -.11), M(box(.1, .3, .1), dk, -.25, .15, .11)); R.legL = legL; R.legR = legR;
+    const tail = M(box(.3, .08, .08), fur, -.5, .58, 0); tail.rotation.z = .5; body.add(tail);
+    g.scale.setScalar(big ? 1.35 : .85);
+  } else {
+    const sk = mat(0x7dd3fc), dk = mat(0x0369a1), eye = emis(0xfef08a);
+    body.add(M(box(.8, .45, .8), sk, 0, .32, 0)); body.add(M(box(.5, .2, .6), dk, .15, .62, 0));
+    body.add(M(box(.14, .14, .14), eye, .3, .74, .2, false), M(box(.14, .14, .14), eye, .3, .74, -.2, false));
+    body.add(M(box(.3, .12, .3), sk, .3, .06, .38), M(box(.3, .12, .3), sk, .3, .06, -.38));
+    g.scale.setScalar(1.25);
+  }
+  return R;
+}

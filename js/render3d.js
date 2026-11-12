@@ -1,7 +1,7 @@
 // Three.js 3D 렌더러
 import * as THREE from 'three';
-import { buildBlockWorld } from './blocks.js';
-import { K, glowTex, glowSprite, mat, emis, buildMinion, buildTower, buildNexus } from './models.js';
+import { buildBlockWorld, buildRiftWorld } from './blocks.js';
+import { K, glowTex, glowSprite, mat, emis, buildMinion, buildTower, buildNexus, buildMonster } from './models.js';
 import { buildHero } from './heroes3d.js';
 import { MAP_W, LANE_Y1, LANE_Y2, MID_Y, FOUNTAIN, TEAMC, clampPt, pickTarget } from './sim.js';
 
@@ -72,17 +72,25 @@ export class Renderer {
 
   /* ---------- 월드 ---------- */
   buildWorld() {
-    const S = this.scene, L = MAP_W * K, zm = MID_Y * K;
+    const S = this.scene;
     S.add(new THREE.HemisphereLight(0xdbe9ff, 0x7a6a58, 1.9));
     const sun = new THREE.DirectionalLight(0xfff6e5, 1.7); sun.position.set(6, 14, 4); S.add(sun); S.add(sun.target); sun.target.position.set(0, 0, 0); this.sun = sun;
-    this.world = buildBlockWorld(S, L, TEAMC);
+    this.relicMeshes = [];
+  }
+  // 맵이 바뀔 때 지형을 새로 만듦 (칼바람: 다리 / 협곡: 3라인 + 정글)
+  setMap(M) {
+    if (this.mapId === M.id) return; this.mapId = M.id;
+    if (this.worldG) { this.scene.remove(this.worldG); this.worldG.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
+    const grp = new THREE.Group(); this.worldG = grp;
+    this.world = M.grid ? buildRiftWorld(grp, M) : buildBlockWorld(grp, M.W * K, TEAMC);
     // 분수: 신호기처럼 위로 뻗는 빛 기둥 (단순 반투명 기둥)
     for (const t of [0, 1]) {
-      const fx = FOUNTAIN[t].x * K, tc = new THREE.Color(TEAMC[t]);
-      const beam = new THREE.Mesh(new THREE.BoxGeometry(.9, 30, .9), new THREE.MeshBasicMaterial({ color: tc, transparent: true, opacity: .35, blending: THREE.AdditiveBlending, depthWrite: false })); beam.position.set(fx, 15, zm); S.add(beam);
-      const core = new THREE.Mesh(new THREE.BoxGeometry(.4, 30, .4), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .6, blending: THREE.AdditiveBlending, depthWrite: false })); core.position.copy(beam.position); S.add(core);
+      const f = M.fountain[t], tc = new THREE.Color(TEAMC[t]);
+      const beam = new THREE.Mesh(new THREE.BoxGeometry(.9, 30, .9), new THREE.MeshBasicMaterial({ color: tc, transparent: true, opacity: .35, blending: THREE.AdditiveBlending, depthWrite: false })); beam.position.set(f.x * K, 15, f.y * K); grp.add(beam);
+      const core = new THREE.Mesh(new THREE.BoxGeometry(.4, 30, .4), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .6, blending: THREE.AdditiveBlending, depthWrite: false })); core.position.copy(beam.position); grp.add(core);
     }
-    this.relicMeshes = [];
+    this.scene.add(grp);
+    this.scene.fog.near = M.grid ? 22 : 26; this.scene.fog.far = M.grid ? 52 : 62;
   }
   buildAim() {
     const g = new THREE.Group(); g.visible = false; this.scene.add(g);
@@ -121,7 +129,11 @@ export class Renderer {
       const spin2 = spin.clone(); spin2.rotation.y = Math.PI; spin.add(spin2);
       const stars = new THREE.Group(); for (let i = 0; i < 3; i++) { const s = glowSprite(0xfde68a, .28, 1); s.position.set(Math.cos(i * 2.1) * .35, 0, Math.sin(i * 2.1) * .35); stars.add(s); } stars.position.y = 2.2; stars.visible = false; root.add(stars);
       const roots = decal(RING_G, 0x86efac, .9, true); roots.scale.setScalar(.6); roots.position.y = .06; roots.visible = false; root.add(roots);
-      v = { kind: 'hero', root, R, ring, bubble, spin, stars, roots, phase: 0, dieT: 0 };
+      const recall = new THREE.Mesh(new THREE.CylinderGeometry(.55, .55, 2.6, 18, 1, true), new THREE.MeshBasicMaterial({ color: tc, transparent: true, opacity: .3, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide })); recall.position.y = 1.3; recall.visible = false; root.add(recall);
+      v = { kind: 'hero', root, R, ring, bubble, spin, stars, roots, recall, phase: 0, dieT: 0 };
+    } else if (u.kind === 'monster') {
+      const R = buildMonster(u.mon, u.big); root = new THREE.Group(); root.add(R.g, this.blob(u.r * K * 1.1));
+      v = { kind: 'minion', root, R, phase: Math.random() * 6 };
     } else if (u.kind === 'minion') {
       const R = buildMinion(u.mk, u.team, tc); R.g.scale.setScalar(1.2); root = new THREE.Group(); root.add(R.g, this.blob(u.mk === 's' ? .5 : .35));
       v = { kind: 'minion', root, R, phase: Math.random() * 6 };
@@ -145,6 +157,7 @@ export class Renderer {
         const tx = u.x * K, tz = u.y * K; const jump = Math.hypot(tx - p.x, tz - p.z) > 1.5;
         if (jump) p.set(tx, 0, tz); else { p.x += (tx - p.x) * Math.min(1, dt * 25); p.z += (tz - p.z) * Math.min(1, dt * 25); }
         this.animHero(v, u, dt, t);
+        v.recall.visible = !!u.recall; if (u.recall) { const k = 1 - u.recall.t / 6; v.recall.scale.set(1 - k * .3, .3 + k * .7, 1 - k * .3); v.recall.position.y = 1.3 * (.3 + k * .7); v.recall.material.opacity = .2 + Math.sin(t * 10) * .08 + k * .2; if (Math.random() < dt * 20) this.parts.emit(p.x + (Math.random() - .5) * .8, .2, p.z + (Math.random() - .5) * .8, { c: TEAMC[u.team], size: .3, vy: 2.5, life: .7 }); }
       } else if (v.kind === 'minion') {
         p.set(u.x * K, 0, u.y * K);
         const sp = Math.hypot(u.vx, u.vy); v.phase += sp * dt * .05;
@@ -317,7 +330,7 @@ export class Renderer {
 
   /* ---------- 프레임 ---------- */
   render(G, dt, opts) {
-    const p = G.player;
+    const p = G.player; this.setMap(G.map);
     this.syncUnits(G, dt); this.syncProjs(G, dt); this.syncZones(G); this.updateFx(G, dt);
     // 회복 구슬
     while (this.relicMeshes.length < G.relics.length) { const g = new THREE.Group(); const m = new THREE.Mesh(new THREE.OctahedronGeometry(.22, 0), new THREE.MeshBasicMaterial({ color: 0x4ade80 })); g.add(m); g.add(glowSprite(0x4ade80, 1.1, .5)); this.scene.add(g); this.relicMeshes.push(g); }
@@ -332,8 +345,15 @@ export class Renderer {
     this.clickT += dt; this.clickRing.material.opacity = Math.max(0, .9 - this.clickT * 2.5); this.clickRing.scale.setScalar(Math.max(.05, .35 - this.clickT * .6));
     this.updateAim(G, p, opts.aiming, opts.mouse, opts.aiming >= 0 ? p.hd.ab[opts.aiming] : null);
     // 카메라
-    const fx = (p ? p.x + (opts.camOff || 0) : MAP_W / 2) * K;
-    const desired = new THREE.Vector3(Math.max(4, Math.min(MAP_W * K - 4, fx)), 0, MID_Y * K + ((p ? p.y : MID_Y) - MID_Y) * K * .35);
+    let desired; const Mp = G.map;
+    if (Mp.grid) { // 협곡: 영웅을 따라가되, 카메라를 옮겼으면 그 위치 (opts.camAt)
+      const c = opts.camAt || (p ? { x: p.x, y: p.y } : { x: Mp.W / 2, y: Mp.H / 2 });
+      desired = new THREE.Vector3(Math.max(4, Math.min(Mp.W * K - 4, c.x * K)), 0, Math.max(2, Math.min(Mp.H * K - 6, c.y * K)));
+    } else {
+      const fx = (p ? p.x + (opts.camOff || 0) : MAP_W / 2) * K;
+      desired = new THREE.Vector3(Math.max(4, Math.min(MAP_W * K - 4, fx)), 0, MID_Y * K + ((p ? p.y : MID_Y) - MID_Y) * K * .35);
+    }
+    if (this.camT.distanceTo(desired) > 15) this.camT.copy(desired);
     this.camT.lerp(desired, Math.min(1, dt * 8));
     this.shake = Math.max(0, this.shake - dt * 1.5); const sh = this.shake * this.shake;
     this.cam.position.set(this.camT.x + (Math.random() - .5) * sh, this.camT.y + 12.5 + (Math.random() - .5) * sh, this.camT.z + 8.2);

@@ -2,11 +2,11 @@
 import * as Sim from './sim.js';
 import { Renderer } from './render3d.js';
 import { Hud } from './hud.js';
-const { HEROES, HMAP, ROLE, DIFF, ITEMS, TEAMC, TEAMN, SELF_T, itemStats, cmd, canShop, targetable } = Sim;
+const { HEROES, HMAP, ROLE, DIFF, ITEMS, TEAMC, TEAMN, SELF_T, POS, itemStats, cmd, canShop, targetable } = Sim;
 
 const glCv = document.getElementById('gl'), hudCv = document.getElementById('hud');
 let R = null, hud = null, G = null;
-const S = { aiming: -1, amove: false, tab: false, paused: false, shopOpen: false, camOff: 0, texts: [], feed: [], banner: null, mx: 0, my: 0, mouse: { x: 0, y: 0 }, rightDown: false, canHit: u => Sim.canHitStructure(u) };
+const S = { aiming: -1, amove: false, tab: false, paused: false, shopOpen: false, camOff: 0, camAt: null, texts: [], feed: [], banner: null, mx: 0, my: 0, mouse: { x: 0, y: 0 }, rightDown: false, canHit: u => Sim.canHitStructure(u) };
 const $ = id => document.getElementById(id);
 let quality = 'high', castMode = 'normal'; // normal: 롤 기본(키→클릭), quick: 키 누르는 즉시, release: 떼는 순간
 try { quality = localStorage.getItem('ibb-quality') || 'high'; castMode = localStorage.getItem('ibb-cast') || 'normal'; } catch (e) { }
@@ -68,7 +68,7 @@ function frame(now) {
     if (S.banner) { S.banner.t -= dt; if (S.banner.t <= 0) S.banner = null; }
     if (S.hint) { S.hint.t -= dt; if (S.hint.t <= 0) S.hint = null; }
     S.mouse = R.pick(S.mx, S.my); S.aimPt = R.pickAt(S.mx, S.my, AIM_H); S.dt = dt;
-    R.render(G, S.paused ? 0 : dt, { aiming: S.aiming, mouse: S.aimPt, camOff: S.camOff });
+    R.render(G, S.paused ? 0 : dt, { aiming: S.aiming, mouse: S.aimPt, camOff: S.camOff, camAt: S.camAt });
     hud.draw(G, R, S);
     hoverCursor();
   }
@@ -83,7 +83,7 @@ function unitUnderMouse(filter) {
   let best = null, bd = 1e9;
   for (const u of G.units) {
     if (u.dead || !filter(u)) continue;
-    const top = u.kind === 'hero' ? 1.9 : u.kind === 'minion' ? .9 : u.kind === 'tower' ? 3.8 : 2.8;
+    const top = u.kind === 'hero' ? 1.9 : u.kind === 'minion' ? .9 : u.kind === 'monster' ? (u.big ? 1.9 : .9) : u.kind === 'tower' ? 3.8 : 2.8;
     const a = R.project(u.x, u.y, 0), b = R.project(u.x, u.y, top), e = R.project(u.x + u.hr, u.y, 0);
     const rad = Math.max(16, Math.hypot(e.x - a.x, e.y - a.y) * 1.05);
     const d = segD(S.mx, S.my, a.x, a.y, b.x, b.y) - (u.kind === 'hero' ? 12 : 0);
@@ -110,23 +110,29 @@ function rightClick(drag) {
   else { cmd(p, { c: 'move', x: S.mouse.x, y: S.mouse.y }); if (!drag) R.clickMarker(S.mouse.x, S.mouse.y, '#4ade80'); }
 }
 hudCv.addEventListener('contextmenu', e => e.preventDefault());
-hudCv.addEventListener('mousemove', e => { S.mx = e.clientX; S.my = e.clientY; if (S.rightDown && playing()) { const now = performance.now(); if (now - (S.dragT || 0) < 60) return; S.dragT = now; S.mouse = R.pick(S.mx, S.my); rightClick(true); } });
+hudCv.addEventListener('mousemove', e => { S.mx = e.clientX; S.my = e.clientY; if (S.mmDrag && G) { const hh = hud.hitTest(S.mx, S.my); if (hh && hh.minimap) S.camAt = hh.minimap; return; } if (S.rightDown && playing()) { const now = performance.now(); if (now - (S.dragT || 0) < 60) return; S.dragT = now; S.mouse = R.pick(S.mx, S.my); rightClick(true); } });
 hudCv.addEventListener('mousedown', e => {
   S.mx = e.clientX; S.my = e.clientY; if (!playing()) return; S.mouse = R.pick(S.mx, S.my); const p = G.player;
-  const hh = hud.hitTest(S.mx, S.my); if (hh) { if (hh.lvl !== undefined && e.button === 0) cmd(p, { c: 'lvl', i: hh.lvl }); return; }
+  const hh = hud.hitTest(S.mx, S.my);
+  if (hh && hh.minimap) { // 미니맵: 좌클릭 카메라 이동, 우클릭 그 지점으로 이동
+    if (e.button === 2) { if (!p.dead) { cmd(p, { c: 'move', x: hh.minimap.x, y: hh.minimap.y }); R.clickMarker(hh.minimap.x, hh.minimap.y, '#4ade80'); } }
+    else { S.camAt = hh.minimap; S.mmDrag = true; } return;
+  }
+  if (hh) { if (hh.lvl !== undefined && e.button === 0) cmd(p, { c: 'lvl', i: hh.lvl }); return; }
   if (e.button === 2 || (e.button === 0 && S.aiming < 0 && !S.amove)) { S.rightDown = e.button === 2; S.pressX = S.mx; S.pressY = S.my; rightClick(false); S.pressTarget = !!G.player.target; return; }
   else if (e.button === 0) {
     if (S.aiming >= 0) { castNow(S.aiming); S.aiming = -1; }
     else if (S.amove && !p.dead) { cmd(p, { c: 'amove', x: S.mouse.x, y: S.mouse.y }); S.amove = false; R.clickMarker(S.mouse.x, S.mouse.y, '#f87171'); }
   }
 });
-window.addEventListener('mouseup', e => { if (e.button === 2) S.rightDown = false; });
+window.addEventListener('mouseup', e => { if (e.button === 2) S.rightDown = false; if (e.button === 0) S.mmDrag = false; });
 window.addEventListener('blur', () => { S.rightDown = false; S.tab = false; });
 const KIDX = { KeyQ: 0, KeyW: 1, KeyE: 2, KeyR: 3 };
 window.addEventListener('keydown', e => {
   if (!G) return; const c = e.code;
   if (c === 'Tab') { e.preventDefault(); S.tab = true; return; }
   if (c === 'Escape') { if (S.shopOpen) closeShop(); else if (S.aiming >= 0) S.aiming = -1; else if (!G.over) S.paused = !S.paused; return; }
+  if (c === 'KeyB' && G.mode === 'rift') { if (playing()) { cmd(G.player, { c: 'recall' }); S.aiming = -1; } return; }
   if (c === 'KeyP' || c === 'KeyB') { if (S.shopOpen) closeShop(); else if (playing()) openShop(); return; }
   if (!playing()) return; const p = G.player;
   if (c in KIDX && e.shiftKey) { e.preventDefault(); if (!e.repeat) cmd(p, { c: 'lvl', i: KIDX[c] }); return; }
@@ -135,7 +141,8 @@ window.addEventListener('keydown', e => {
   else if (c === 'KeyF') { const pt = R.pickAt(S.mx, S.my, AIM_H); cmd(p, { c: 'spell', k: 'F', x: pt.x, y: pt.y }); }
   else if (c === 'KeyS') cmd(p, { c: 'stop' });
   else if (c === 'KeyA') S.amove = true;
-  else if (c === 'Space') { e.preventDefault(); S.camOff = 0; }
+  else if (c === 'Space') { e.preventDefault(); S.camOff = 0; S.camAt = null; }
+  else if (G.mode === 'rift' && c.startsWith('Arrow')) { e.preventDefault(); const b = S.camAt || { x: p.x, y: p.y }, d = 500; S.camAt = { x: b.x + (c === 'ArrowLeft' ? -d : c === 'ArrowRight' ? d : 0), y: b.y + (c === 'ArrowUp' ? -d : c === 'ArrowDown' ? d : 0) }; }
   else if (c === 'ArrowLeft') S.camOff -= 400; else if (c === 'ArrowRight') S.camOff += 400;
 });
 window.addEventListener('keyup', e => {
@@ -144,11 +151,11 @@ window.addEventListener('keyup', e => {
 });
 
 /* ---------------- 상점 ---------------- */
-function openShop() { const p = G.player; if (!canShop(p)) { banner('상점은 죽었을 때 다시 열립니다 (기지를 떠나거나 공격받으면 닫힘)', '#fca5a5', 2.2); return; } S.shopOpen = true; S.paused = true; renderShop(); $('shop').classList.remove('hidden'); }
+function openShop() { const p = G.player; if (!canShop(p)) { banner(G.mode === 'rift' ? '상점은 기지에서만 열 수 있습니다 (B: 귀환)' : '상점은 죽었을 때 다시 열립니다 (기지를 떠나거나 공격받으면 닫힘)', '#fca5a5', 2.2); return; } S.shopOpen = true; S.paused = true; renderShop(); $('shop').classList.remove('hidden'); }
 function closeShop() { S.shopOpen = false; S.paused = false; $('shop').classList.add('hidden'); }
 function renderShop() {
   const p = G.player, el = $('shopIn');
-  let h = `<h2>상점 <span style="color:#facc15;font-size:18px;margin-left:8px">💰 ${Math.floor(p.gold)}</span></h2><p class="sub" style="margin:0">아이템을 눌러 구매하세요. 보유 아이템을 누르면 70% 가격에 판매합니다. 칼바람 규칙: 기지를 떠나거나 공격받으면 상점은 다음에 죽을 때까지 닫힙니다. (상점이 열려 있는 동안 게임이 멈춥니다)</p><div class="inv">`;
+  let h = `<h2>상점 <span style="color:#facc15;font-size:18px;margin-left:8px">💰 ${Math.floor(p.gold)}</span></h2><p class="sub" style="margin:0">아이템을 눌러 구매하세요. 보유 아이템을 누르면 70% 가격에 판매합니다. ${G.mode === 'rift' ? '협곡 규칙: 기지(분수대 근처)에 있거나 죽어 있을 때만 살 수 있습니다. B로 귀환하세요.' : '칼바람 규칙: 기지를 떠나거나 공격받으면 상점은 다음에 죽을 때까지 닫힙니다.'} (상점이 열려 있는 동안 게임이 멈춥니다)</p><div class="inv">`;
   for (let i = 0; i < 6; i++) { const id = p.items[i]; h += id ? `<div class="slot f" data-sell="${i}"><b>${ITEMS[id].n}</b><br>판매 +${Math.floor(ITEMS[id].c * .7)}</div>` : `<div class="slot">빈 칸</div>`; }
   h += `</div><div class="items">`;
   for (const [id, it] of Object.entries(ITEMS)) { const own = p.items.includes(id), no = !own && (p.gold < it.c || p.items.length >= 6); h += `<div class="it ${own ? 'own' : no ? 'no' : ''}" data-buy="${id}"><b>${it.n}</b><span class="c">${it.c}G</span>${own ? ' · 보유 중' : ''}<div class="s">${itemStats(it)}</div></div>`; }
@@ -159,7 +166,7 @@ function renderShop() {
 }
 
 /* ---------------- 메뉴 ---------------- */
-const M = { mode: '1v1', hero: 'graff', enemy: 'random', diff: 1, autoSkill: false };
+const M = { mode: '1v1', hero: 'graff', enemy: 'random', diff: 1, autoSkill: false, pos: 'mid' };
 try { M.autoSkill = localStorage.getItem('ibb-autoskill') === '1'; } catch (e) { }
 function heroCards(sel, attr) {
   let h = '';
@@ -167,14 +174,17 @@ function heroCards(sel, attr) {
   h += `<div class="card ${sel === 'random' ? 'sel' : ''}" data-${attr}="random"><div class="top"><div class="av" style="background:#e6eefc">?</div><div><b>무작위</b><div class="role">랜덤</div></div></div><div class="d">어떤 영웅이 걸릴지 모릅니다.</div></div>`;
   return h;
 }
+const POS_HINT = { top: '추천: 그라프·바르칸·로칸·브락스', jungle: '추천: 니야·로칸·바르칸·브락스 (강타)', mid: '추천: 솔린·니야·카이라', bot: '추천: 카이라·솔린 (서포터와 함께)', sup: '추천: 테라·그라프·솔린' };
 function buildMenu() {
   const m = $('menu');
   m.innerHTML = `<div class="panel"><h1>얼음 다리 난투 <small>3D</small></h1><p class="sub">얼어붙은 협곡 위 단 하나의 다리. 상대 넥서스를 먼저 부수면 승리합니다.</p>
   <div class="tabs">
     <button data-mode="1v1" class="${M.mode === '1v1' ? 'on' : ''}">⚔ AI와 1대1</button>
-    <button data-mode="5v5" class="${M.mode === '5v5' ? 'on' : ''}">👥 5대5 AI 대전</button>
+    <button data-mode="5v5" class="${M.mode === '5v5' ? 'on' : ''}">👥 칼바람 5대5</button>
+    <button data-mode="rift" class="${M.mode === 'rift' ? 'on' : ''}">🌲 협곡 5대5 <em>15분</em></button>
     <button disabled title="다음 업데이트에서 추가됩니다">🌐 온라인 1대1 <em>준비 중</em></button>
   </div>
+  ${M.mode === 'rift' ? `<h3>포지션</h3><div class="row" style="margin:0 0 6px"><div class="seg">${Object.entries(POS).map(([k, n]) => `<button data-p="${k}" class="${M.pos === k ? 'on' : ''}">${n}</button>`).join('')}</div><span class="lbl" style="margin-left:10px">${POS_HINT[M.pos]}</span></div>` : ''}
   <h3>내 영웅</h3><div class="grid">${heroCards(M.hero, 'h')}</div>
   ${M.mode === '1v1' ? `<h3>상대 영웅</h3><div class="grid small">${heroCards(M.enemy, 'e')}</div>` : ''}
   <div class="row"><span class="lbl">AI 난이도</span><div class="seg">${DIFF.map((d, i) => `<button data-d="${i}" class="${M.diff === i ? 'on' : ''}">${d.name}</button>`).join('')}</div>
@@ -183,8 +193,9 @@ function buildMenu() {
   <span class="lbl">스킬 찍기</span><div class="seg"><button data-s="0" class="${!M.autoSkill ? 'on' : ''}">직접 (+ 버튼 / Shift+키)</button><button data-s="1" class="${M.autoSkill ? 'on' : ''}">자동</button></div>
   <div style="flex:1"></div><button class="btn" id="go">게임 시작</button></div>
   <div id="menuErr" class="err"></div>
-  <div class="help"><b>조작법</b><br><kbd>우클릭</kbd>(또는 좌클릭) 이동·공격, 누른 채 끌면 계속 이동 &nbsp; <kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd><kbd>R</kbd> 스킬 (시전 방식은 위에서 선택, 조준 중 <kbd>우클릭</kbd>/<kbd>Esc</kbd> 취소) &nbsp; <kbd>D</kbd> 점멸 &nbsp; <kbd>F</kbd> 눈덩이 (맞춘 뒤 다시 <kbd>F</kbd>로 돌진)<br><kbd>A</kbd>+좌클릭 공격 이동 &nbsp; <kbd>S</kbd> 정지 &nbsp; <kbd>P</kbd> 상점 (기지 또는 사망 시) &nbsp; <kbd>Tab</kbd> 점수판 &nbsp; <kbd>←</kbd><kbd>→</kbd> 카메라, <kbd>Space</kbd> 복귀 &nbsp; <kbd>Esc</kbd> 일시정지 &nbsp; <kbd>Shift</kbd>+<kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd><kbd>R</kbd> 스킬 레벨업<br><b>칼바람 규칙</b>: 분수대에서 회복되지 않고 체력은 아주 천천히만 찹니다. 다리 위 초록 구슬은 근처 아군 모두의 체력과 마나를 채웁니다. 상점은 기지를 떠나거나 공격받으면 다음에 죽을 때까지 닫힙니다. 적 분수대에 들어가면 순식간에 녹습니다. 화면이 버벅이면 그래픽을 '낮음'으로 바꿔보세요.</div></div>`;
+  <div class="help"><b>조작법</b><br><kbd>우클릭</kbd>(또는 좌클릭) 이동·공격, 누른 채 끌면 계속 이동 &nbsp; <kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd><kbd>R</kbd> 스킬 (시전 방식은 위에서 선택, 조준 중 <kbd>우클릭</kbd>/<kbd>Esc</kbd> 취소) &nbsp; <kbd>D</kbd> 점멸 &nbsp; <kbd>F</kbd> 눈덩이 (맞춘 뒤 다시 <kbd>F</kbd>로 돌진)<br><kbd>A</kbd>+좌클릭 공격 이동 &nbsp; <kbd>S</kbd> 정지 &nbsp; <kbd>P</kbd> 상점 (기지 또는 사망 시) &nbsp; <kbd>Tab</kbd> 점수판 &nbsp; <kbd>←</kbd><kbd>→</kbd> 카메라, <kbd>Space</kbd> 복귀 &nbsp; <kbd>Esc</kbd> 일시정지 &nbsp; <kbd>Shift</kbd>+<kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd><kbd>R</kbd> 스킬 레벨업<br>${M.mode === 'rift' ? `<b>협곡 규칙</b>: 3개 라인(탑·미드·봇)과 정글. 라인마다 포탑 1개 + 넥서스 앞 포탑 1개. 라인 포탑 중 하나라도 부수면 넥서스 포탑, 그걸 부수면 넥서스를 칠 수 있습니다. <kbd>B</kbd> 귀환(6초) · 분수대에서 빠르게 회복 · 상점은 기지에서만. 정글러는 <kbd>F</kbd> 강타, 나머지는 <kbd>F</kbd> 회복. 푸른 정령(스킬 가속)·붉은 골렘(평타 둔화) 버프. 미니맵 좌클릭 카메라 이동, 우클릭 이동, 방향키 카메라, <kbd>Space</kbd> 내 영웅으로. 10분부터 구조물이 점점 약해져 15분 안팎에 끝납니다.` : `<b>칼바람 규칙</b>: 분수대에서 회복되지 않고 체력은 아주 천천히만 찹니다. 다리 위 초록 구슬은 근처 아군 모두의 체력과 마나를 채웁니다. 상점은 기지를 떠나거나 공격받으면 다음에 죽을 때까지 닫힙니다. 적 분수대에 들어가면 순식간에 녹습니다. 화면이 버벅이면 그래픽을 '낮음'으로 바꿔보세요.`}</div></div>`;
   m.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { M.mode = b.dataset.mode; buildMenu(); });
+  m.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { M.pos = b.dataset.p; buildMenu(); });
   m.querySelectorAll('[data-h]').forEach(c => c.onclick = () => { M.hero = c.dataset.h; buildMenu(); });
   m.querySelectorAll('[data-e]').forEach(c => c.onclick = () => { M.enemy = c.dataset.e; buildMenu(); });
   m.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { M.diff = +b.dataset.d; buildMenu(); });
@@ -196,9 +207,9 @@ function buildMenu() {
 function startGame() {
   if (!initGfx()) return;
   $('menu').classList.add('hidden'); $('end').classList.add('hidden');
-  Object.assign(S, { aiming: -1, amove: false, paused: false, shopOpen: false, camOff: 0, texts: [], feed: [], banner: null });
+  Object.assign(S, { aiming: -1, amove: false, paused: false, shopOpen: false, camOff: 0, camAt: null, texts: [], feed: [], banner: null });
   R.reset();
-  G = Sim.newGame({ mode: M.mode, pick: M.hero, enemy: M.enemy, diff: M.diff, autoSkill: M.autoSkill });
+  G = Sim.newGame({ mode: M.mode, pick: M.hero, enemy: M.enemy, diff: M.diff, autoSkill: M.autoSkill, pos: M.pos });
   window.G = G; window.Sim = Sim; window.R = R; // 디버그/테스트용
   openShop();
 }
@@ -206,8 +217,8 @@ function endGame(winner) {
   S.aiming = -1; const win = winner === G.player.team; banner(win ? '승리!' : '패배', win ? '#93c5fd' : '#fca5a5', 5);
   setTimeout(() => {
     const mm = Math.floor(G.t / 60), ss = Math.floor(G.t % 60);
-    let h = `<h1 style="color:${win ? '#93c5fd' : '#fca5a5'}">${win ? '승리!' : '패배'}</h1><p class="sub">게임 시간 ${mm}분 ${ss}초 · ${TEAMN[0]} ${G.kills[0]} : ${G.kills[1]} ${TEAMN[1]} · 난이도 ${DIFF[G.diff].name}</p><table><tr><th>팀</th><th>영웅</th><th>레벨</th><th>K / D / A</th><th>아이템</th></tr>`;
-    for (const hh of G.heroes) h += `<tr style="${hh.isPlayer ? 'color:#ffd166;font-weight:700' : ''}"><td style="color:${TEAMC[hh.team]}">${TEAMN[hh.team]}</td><td>${hname(hh)}</td><td>${hh.level}</td><td>${hh.k} / ${hh.d} / ${hh.a}</td><td style="font-size:12px;color:#9fb3d1">${hh.items.map(i => ITEMS[i].n).join(', ')}</td></tr>`;
+    let h = `<h1 style="color:${win ? '#93c5fd' : '#fca5a5'}">${win ? '승리!' : '패배'}</h1><p class="sub">게임 시간 ${mm}분 ${ss}초 · ${TEAMN[0]} ${G.kills[0]} : ${G.kills[1]} ${TEAMN[1]} · 난이도 ${DIFF[G.diff].name}</p><table><tr><th>팀</th><th>영웅</th><th>레벨</th><th>K / D / A</th>${G.mode === 'rift' ? '<th>CS</th>' : ''}<th>아이템</th></tr>`;
+    for (const hh of G.heroes) h += `<tr style="${hh.isPlayer ? 'color:#ffd166;font-weight:700' : ''}"><td style="color:${TEAMC[hh.team]}">${TEAMN[hh.team]}</td><td>${hh.pos ? '[' + POS[hh.pos] + '] ' : ''}${hname(hh)}</td><td>${hh.level}</td><td>${hh.k} / ${hh.d} / ${hh.a}</td>${G.mode === 'rift' ? `<td>${hh.cs}</td>` : ''}<td style="font-size:12px;color:#9fb3d1">${hh.items.map(i => ITEMS[i].n).join(', ')}</td></tr>`;
     h += `</table><div class="row"><button class="btn" id="again">다시 하기</button><button class="btn sec" id="toMenu">메뉴로</button></div>`; $('endIn').innerHTML = h; $('end').classList.remove('hidden');
     $('again').onclick = startGame; $('toMenu').onclick = () => { $('end').classList.add('hidden'); $('menu').classList.remove('hidden'); buildMenu(); };
   }, 2600);

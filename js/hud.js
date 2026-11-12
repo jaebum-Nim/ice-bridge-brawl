@@ -1,5 +1,5 @@
 // 2D 오버레이: 체력바, 피해 숫자, 하단 패널, 미니맵, 알림
-import { MAP_W, LANE_Y1, LANE_Y2, TEAMC, TEAMN, ITEMS, itemStats, need, effMs, canShop, clamp, canLevel, cdOf, costOf, SPELL_CD } from './sim.js';
+import { MAP_W, LANE_Y1, LANE_Y2, TEAMC, TEAMN, ITEMS, itemStats, need, effMs, canShop, clamp, canLevel, cdOf, costOf, spellOf, smiteDmg, POS, RECALL_T } from './sim.js';
 
 const FONT = 'system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif';
 export class Hud {
@@ -14,7 +14,7 @@ export class Hud {
     if (sh > 0) { c.fillStyle = '#f1f5f9'; c.fillRect(x - w / 2 + w * u.hp / tot, y, w * sh / tot, h); }
     if (ticks) { c.strokeStyle = 'rgba(0,0,0,.55)'; c.lineWidth = 1; c.beginPath(); for (let v = 200; v < u.maxHp; v += 200) { const px = x - w / 2 + w * v / tot; c.moveTo(px, y); c.lineTo(px, y + h * (v % 1000 ? .5 : 1)); } c.stroke(); }
   }
-  hitTest(x, y) { for (const r of this.rects) if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h && r.lvl !== undefined) return r; const p = this.panelRect; return p && x >= p.x && x <= p.x + p.w && y >= p.y - 14 && y <= p.y + p.h ? { panel: true } : null; }
+  hitTest(x, y) { const m = this.mmRect; if (m && x >= m.x && x <= m.x + m.w && y >= m.y && y <= m.y + m.h) return { minimap: { x: (x - m.x) / m.w * m.W, y: (y - m.y) / m.h * m.H } }; for (const r of this.rects) if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h && r.lvl !== undefined) return r; const p = this.panelRect; return p && x >= p.x && x <= p.x + p.w && y >= p.y - 14 && y <= p.y + p.h ? { panel: true } : null; }
   wrap(s, maxW) { const out = []; let cur = ''; for (const w of s.split(' ')) { const t = cur ? cur + ' ' + w : w; if (this.ctx.measureText(t).width > maxW && cur) { out.push(cur); cur = w; } else cur = t; } if (cur) out.push(cur); return out; }
 
   draw(G, R, S) {
@@ -23,7 +23,7 @@ export class Hud {
     // 유닛 위 체력바
     for (const u of G.units) {
       if (u.dead) continue;
-      const hgt = u.kind === 'hero' ? 2.35 : u.kind === 'minion' ? (u.mk === 's' ? 1.0 : .95) : u.kind === 'tower' ? 4.5 : 3.6;
+      const hgt = u.kind === 'hero' ? 2.35 : u.kind === 'minion' ? (u.mk === 's' ? 1.0 : .95) : u.kind === 'monster' ? (u.big ? 2.2 : 1.2) : u.kind === 'tower' ? 4.5 : 3.6;
       const s = R.project(u.x, u.y, hgt); if (!s.vis || s.x < -100 || s.x > W + 100 || s.y < -50 || s.y > H + 50) continue;
       const ally = u.team === p.team;
       if (u.kind === 'hero') {
@@ -33,7 +33,9 @@ export class Hud {
         c.fillStyle = '#0b1220'; c.fillRect(s.x - 58, s.y - 3, 22, 17); this.txt(u.level, s.x - 47, s.y + 10, 12, '#e6eefc', 'center', 800);
         this.txt(u.isPlayer ? u.name + '(나)' : u.name, s.x, s.y - 7, 13, u === p ? '#ffd166' : '#e6eefc', 'center', 800, 3);
         if (p.mark && p.mark.tgt === u) this.txt('❄ F', s.x + 70, s.y + 10, 12, '#e0f2fe', 'left', 800, 3);
+        if (u.recall) { const k = 1 - u.recall.t / RECALL_T; c.fillStyle = 'rgba(5,8,14,.85)'; c.fillRect(s.x - 40, s.y - 30, 80, 7); c.fillStyle = '#93c5fd'; c.fillRect(s.x - 39, s.y - 29, 78 * k, 5); }
       } else if (u.kind === 'minion') { if (u.hp < u.maxHp) this.bar(s.x, s.y, 40, 5, u, ally ? '#60a5fa' : '#f87171'); }
+      else if (u.kind === 'monster') { if (u.hp < u.maxHp || u.big) this.bar(s.x, s.y, u.big ? 80 : 44, u.big ? 7 : 5, u, '#e7b75f'); if (u.big && p.spells.F === 'smite' && u.hp <= smiteDmg(p)) this.txt('강타!', s.x, s.y - 6, 12, '#fde68a', 'center', 900, 3); }
       else { this.bar(s.x, s.y, u.kind === 'nexus' ? 150 : 110, 10, u, TEAMC[u.team]); if (!S.canHit(u)) this.txt('무적', s.x, s.y - 6, 12, '#cbd5e1', 'center', 700, 3); }
     }
     // 떠오르는 숫자
@@ -49,12 +51,26 @@ export class Hud {
     this.txt(G.kills[0], W / 2 - 52, 40, 26, TEAMC[0], 'center', 900); this.txt(G.kills[1], W / 2 + 52, 40, 26, TEAMC[1], 'center', 900);
     this.txt(`${mm}:${String(ss).padStart(2, '0')}`, W / 2, 37, 15, '#c6d4ea', 'center', 600);
     // 미니맵
-    const mw = Math.min(300, W * .3), mh = 54, mx = W - mw - 12, my = 10;
-    this.rr(mx, my, mw, mh, 8); c.fillStyle = 'rgba(8,14,28,.85)'; c.fill();
-    const wx = x => mx + 6 + (x / MAP_W) * (mw - 12), wy = y => my + 6 + ((y - LANE_Y1) / (LANE_Y2 - LANE_Y1)) * (mh - 12);
-    c.fillStyle = '#34445e'; c.fillRect(mx + 6, my + 6, mw - 12, mh - 12);
-    for (const u of G.units) { if (u.dead) continue; c.fillStyle = TEAMC[u.team]; if (u.kind === 'hero') { c.beginPath(); c.arc(wx(u.x), wy(u.y), u === p ? 5 : 4, 0, 7); c.fill(); if (u === p) { c.strokeStyle = '#ffd166'; c.lineWidth = 2; c.stroke(); } } else if (u.kind === 'minion') c.fillRect(wx(u.x) - 1, wy(u.y) - 1, 2, 2); else c.fillRect(wx(u.x) - 4, wy(u.y) - 4, 8, 8); }
-    const camL = R.pick(0, H / 2).x, camR = R.pick(W, H / 2).x; c.strokeStyle = 'rgba(255,255,255,.6)'; c.lineWidth = 1; c.strokeRect(wx(clamp(camL, 0, MAP_W)), my + 3, Math.max(4, wx(clamp(camR, 0, MAP_W)) - wx(clamp(camL, 0, MAP_W))), mh - 6);
+    let mw, mh, mx, my; const M = G.map;
+    if (M.grid) { // 협곡: 정사각형 미니맵 (클릭하면 카메라 이동)
+      mw = mh = Math.min(200, W * .22, H * .3); mx = W - mw - 12; my = 10;
+      if (!this.mmImg || this.mmImg.map !== M) { const cv = document.createElement('canvas'); cv.width = cv.height = M.N; const g = cv.getContext('2d'); const col = ['#1f3b2c', '#8b93a3', '#c9d6e3', '#7fb3ea', '#9fb3cc']; for (let y = 0; y < M.N; y++) for (let x = 0; x < M.N; x++) { g.fillStyle = col[M.grid[y * M.N + x]]; g.fillRect(x, y, 1, 1); } this.mmImg = { cv, map: M }; }
+      this.rr(mx - 4, my - 4, mw + 8, mh + 8, 8); c.fillStyle = 'rgba(8,14,28,.9)'; c.fill();
+      c.imageSmoothingEnabled = false; c.drawImage(this.mmImg.cv, mx, my, mw, mh); c.imageSmoothingEnabled = true;
+      this.mmRect = { x: mx, y: my, w: mw, h: mh, W: M.W, H: M.H };
+      const wx = x => mx + x / M.W * mw, wy = y => my + y / M.H * mh;
+      for (const k of G.camps) if (k.up) { c.fillStyle = k.type === 'blue' ? '#60a5fa' : k.type === 'red' ? '#f87171' : '#e7b75f'; c.beginPath(); c.arc(wx(k.x), wy(k.y), 3, 0, 7); c.fill(); }
+      for (const u of G.units) { if (u.dead || u.kind === 'monster') continue; c.fillStyle = TEAMC[u.team]; if (u.kind === 'minion') c.fillRect(wx(u.x) - 1, wy(u.y) - 1, 2, 2); else if (u.kind !== 'hero') { c.fillRect(wx(u.x) - 3.5, wy(u.y) - 3.5, 7, 7); c.strokeStyle = '#0b1220'; c.lineWidth = 1; c.strokeRect(wx(u.x) - 3.5, wy(u.y) - 3.5, 7, 7); } }
+      for (const u of G.heroes) { if (u.dead) continue; c.beginPath(); c.arc(wx(u.x), wy(u.y), u === p ? 5 : 4, 0, 7); c.fillStyle = TEAMC[u.team]; c.fill(); c.strokeStyle = u === p ? '#ffd166' : '#0b1220'; c.lineWidth = u === p ? 2 : 1; c.stroke(); }
+      const q = [R.pick(0, 0), R.pick(W, 0), R.pick(W, H), R.pick(0, H)]; c.strokeStyle = 'rgba(255,255,255,.7)'; c.lineWidth = 1; c.beginPath(); q.forEach((pt, i) => { const X = clamp(wx(pt.x), mx, mx + mw), Y = clamp(wy(pt.y), my, my + mh); if (i) c.lineTo(X, Y); else c.moveTo(X, Y); }); c.closePath(); c.stroke();
+    } else {
+      mw = Math.min(300, W * .3); mh = 54; mx = W - mw - 12; my = 10; this.mmRect = null;
+      this.rr(mx, my, mw, mh, 8); c.fillStyle = 'rgba(8,14,28,.85)'; c.fill();
+      const wx = x => mx + 6 + (x / MAP_W) * (mw - 12), wy = y => my + 6 + ((y - LANE_Y1) / (LANE_Y2 - LANE_Y1)) * (mh - 12);
+      c.fillStyle = '#34445e'; c.fillRect(mx + 6, my + 6, mw - 12, mh - 12);
+      for (const u of G.units) { if (u.dead) continue; c.fillStyle = TEAMC[u.team]; if (u.kind === 'hero') { c.beginPath(); c.arc(wx(u.x), wy(u.y), u === p ? 5 : 4, 0, 7); c.fill(); if (u === p) { c.strokeStyle = '#ffd166'; c.lineWidth = 2; c.stroke(); } } else if (u.kind === 'minion') c.fillRect(wx(u.x) - 1, wy(u.y) - 1, 2, 2); else c.fillRect(wx(u.x) - 4, wy(u.y) - 4, 8, 8); }
+      const camL = R.pick(0, H / 2).x, camR = R.pick(W, H / 2).x; c.strokeStyle = 'rgba(255,255,255,.6)'; c.lineWidth = 1; c.strokeRect(wx(clamp(camL, 0, MAP_W)), my + 3, Math.max(4, wx(clamp(camR, 0, MAP_W)) - wx(clamp(camL, 0, MAP_W))), mh - 6);
+    }
     // 킬 피드
     let fy = my + mh + 22;
     for (const m of S.feed) { c.globalAlpha = Math.min(1, m.t); c.font = `700 13px ${FONT}`; const sep = '  ⚔  ', vw = c.measureText(m.v).width, sw = c.measureText(sep).width, kw = c.measureText(m.k).width; this.rr(W - 12 - vw - sw - kw - 16, fy - 15, vw + sw + kw + 16, 22, 6); c.fillStyle = 'rgba(8,14,28,.8)'; c.fill(); c.textAlign = 'right'; c.fillStyle = m.vc; c.fillText(m.v, W - 20, fy); c.fillStyle = '#c6d4ea'; c.fillText(sep, W - 20 - vw, fy); c.fillStyle = m.kc; c.fillText(m.k, W - 20 - vw - sw, fy); fy += 26; }
@@ -90,11 +106,12 @@ export class Hud {
       this.rects.push({ x: bx, y, w: s, h: s, title: `[${KEYS[i]}] ${ab.n}  랭크 ${rank}/${maxR}`, sub: `재사용 대기시간 ${cdOf(p, i).toFixed(1)}초${cost ? ' · 마나 ' + cost : ''}${i === 3 ? ' · 6/11/16레벨에 찍기' : ''}`, body: ab.desc }); bx += s + 8;
     }
     bx += 6;
-    for (const [k, nm, desc] of [['D', '점멸', '짧은 거리를 즉시 순간이동합니다.'], ['F', '눈덩이', '눈덩이를 던져 맞춘 적에게 고정 피해(20 + 레벨×10)와 표식을 남깁니다. 3초 안에 다시 F를 누르면 그 적에게 돌진하고 재사용 대기시간이 25% 줄어듭니다.']]) {
+    for (const k of ['D', 'F']) {
+      const sp = spellOf(p, k), nm = sp.n, desc = sp.desc;
       const s = 44, y = py + 16; this.rr(bx, y, s, s, 8); c.fillStyle = '#16233d'; c.fill(); c.strokeStyle = k === 'F' && p.mark ? '#e0f2fe' : '#2c4670'; c.lineWidth = 2; c.stroke();
       const onCd = p.spellCd[k] > 0 && !(k === 'F' && p.mark); if (!onCd) this.txt(nm.slice(0, 2), bx + s / 2, y + s / 2 + 5, 13, '#e0f2fe', 'center', 800);
-      if (onCd) { c.save(); this.rr(bx, y, s, s, 8); c.clip(); c.fillStyle = 'rgba(0,0,0,.65)'; c.fillRect(bx, y, s, s * Math.min(1, p.spellCd[k] / SPELL_CD[k])); c.restore(); this.txt(Math.ceil(p.spellCd[k]), bx + s / 2, y + s / 2 + 6, 16, '#ffffff', 'center', 800); }
-      this.txt(k, bx + 6, y + 12, 10, '#ffd166', 'center', 800); this.rects.push({ x: bx, y, w: s, h: s, title: `[${k}] ${nm}`, sub: `재사용 대기시간 ${SPELL_CD[k]}초`, body: desc }); bx += s + 6;
+      if (onCd) { c.save(); this.rr(bx, y, s, s, 8); c.clip(); c.fillStyle = 'rgba(0,0,0,.65)'; c.fillRect(bx, y, s, s * Math.min(1, p.spellCd[k] / sp.cd)); c.restore(); this.txt(Math.ceil(p.spellCd[k]), bx + s / 2, y + s / 2 + 6, 16, '#ffffff', 'center', 800); }
+      this.txt(k, bx + 6, y + 12, 10, '#ffd166', 'center', 800); this.rects.push({ x: bx, y, w: s, h: s, title: `[${k}] ${nm}`, sub: `재사용 대기시간 ${sp.cd}초`, body: desc }); bx += s + 6;
     }
     const hbW = bx - ax - 6, hbY = py + 74; c.fillStyle = '#0b1220'; c.fillRect(ax, hbY, hbW, 18);
     if (p.maxMana) { c.fillStyle = '#0b1220'; c.fillRect(ax, hbY + 20, hbW, 9); c.fillStyle = '#3b82f6'; c.fillRect(ax, hbY + 20, hbW * p.mana / p.maxMana, 9); this.txt(`${Math.floor(p.mana)} / ${Math.round(p.maxMana)}`, ax + hbW / 2, hbY + 28, 8.5, '#e0ecff', 'center', 700); }
@@ -105,7 +122,7 @@ export class Hud {
     const ix = ax + hbW + 16;
     for (let i = 0; i < 6; i++) { const s = 36, x = ix + (i % 3) * (s + 5), y = py + 12 + Math.floor(i / 3) * (s + 5); this.rr(x, y, s, s, 6); c.fillStyle = '#111d33'; c.fill(); c.strokeStyle = '#24395c'; c.lineWidth = 1.5; c.stroke(); const id = p.items[i]; if (id) { this.txt(ITEMS[id].n.slice(0, 2), x + s / 2, y + s / 2 + 5, 12, '#ffd166', 'center', 800); this.rects.push({ x, y, w: s, h: s, title: ITEMS[id].n, sub: '', body: itemStats(ITEMS[id]) }); } }
     this.txt(`💰 ${Math.floor(p.gold)}`, ix, py + 108, 14, '#facc15', 'left', 800);
-    if (canShop(p)) this.txt('P: 상점', ix + 70, py + 108, 12, '#86efac', 'left', 700);
+    if (canShop(p)) this.txt('P: 상점', ix + 70, py + 108, 12, '#86efac', 'left', 700); else if (G.mode === 'rift') this.txt('B: 귀환', ix + 70, py + 108, 12, '#93c5fd', 'left', 700);
     const sx = ix + 130; if (sx + 80 < px + pw) { const st = [['공격력', Math.round(p.ad)], ['주문력', Math.round(p.ap)], ['방어력', Math.round(p.def)], ['공격 속도', p.as.toFixed(2)], ['이동 속도', Math.round(effMs(p))], ['스킬 가속', p.ah]]; st.forEach((s, i) => { this.txt(s[0], sx, py + 24 + i * 16, 11.5, '#9fb3d1', 'left', 600); this.txt(s[1], px + pw - 14, py + 24 + i * 16, 11.5, '#e6eefc', 'right', 800); }); }
     if (S.amove) this.txt('공격 이동: 좌클릭으로 지점 선택', W / 2, py - 12, 13, '#fca5a5', 'center', 700, 3);
     if (p.pts > 0 && [0, 1, 2, 3].some(i => canLevel(p, i)) && !S.hint) this.txt(`스킬 포인트 ${p.pts}개 — + 버튼 또는 Shift+Q/W/E/R`, W / 2, py - (S.amove ? 32 : 30), 13, '#fde68a', 'center', 800, 3);
@@ -125,7 +142,7 @@ export class Hud {
     for (const team of [0, 1]) {
       const hs = G.heroes.filter(h => h.team === team), oy = y + 32 + team * (30 + n * 24);
       this.txt(TEAMN[team] + `  ${G.kills[team]}킬`, x + 20, oy, 15, TEAMC[team], 'left', 800);
-      hs.forEach((h, i) => { const yy = oy + 24 + i * 24; this.txt((h.isPlayer ? h.name + '(나)' : h.name) + (h.dead ? ' (사망)' : ''), x + 30, yy, 13, h.isPlayer ? '#ffd166' : '#e6eefc', 'left', 700); this.txt('Lv' + h.level, x + w * .38, yy, 13, '#c6d4ea'); this.txt(`${h.k} / ${h.d} / ${h.a}`, x + w * .5, yy, 13, '#e6eefc', 'left', 700); this.txt(h.items.map(i => ITEMS[i].n.slice(0, 2)).join(' '), x + w * .66, yy, 12, '#9fb3d1'); });
+      hs.forEach((h, i) => { const yy = oy + 24 + i * 24; this.txt((h.pos ? '[' + POS[h.pos] + '] ' : '') + (h.isPlayer ? h.name + '(나)' : h.name) + (h.dead ? ' (사망)' : ''), x + 30, yy, 13, h.isPlayer ? '#ffd166' : '#e6eefc', 'left', 700); if (h.pos) this.txt('CS ' + h.cs, x + w * .62, yy, 12, '#9fb3d1'); this.txt('Lv' + h.level, x + w * .38, yy, 13, '#c6d4ea'); this.txt(`${h.k} / ${h.d} / ${h.a}`, x + w * .5, yy, 13, '#e6eefc', 'left', 700); this.txt(h.items.map(i => ITEMS[i].n.slice(0, 2)).join(' '), x + w * (h.pos ? .73 : .66), yy, 12, '#9fb3d1'); });
     }
   }
 }

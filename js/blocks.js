@@ -101,3 +101,38 @@ export function buildBlockWorld(scene, L, teamColors) {
   const lampM = new THREE.InstancedMesh(lampG, lampMat, lamps.length); lamps.forEach((p, i) => { m4.makeTranslation(...p); lampM.setMatrixAt(i, m4); }); scene.add(lampM);
   return { lampPos: lamps, update: () => { } };
 }
+
+/* ---------- 협곡 월드: 맵 격자(1칸 = 블록 1개)로부터 생성 ---------- */
+// 칸 종류: 0 벽(눈 덮인 숲), 1 라인(돌길), 2 정글 길(눈밭), 3 강(얼음), 4 기지
+export function buildRiftWorld(scene, M) {
+  const R = seeded(7), N = M.N, g = M.grid, at = (x, z) => x < 0 || z < 0 || x >= N || z >= N ? 0 : g[z * N + x];
+  const lists = {}; const put = (t, x, y, z) => (lists[t] || (lists[t] = [])).push(x, y, z);
+  const nz = noise2(3);
+  for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) {
+    const t = at(x, z), cx = x + .5, cz = z + .5;
+    if (t === 0) {
+      put('grass', cx, -1, cz);
+      // 길에서 가까운 벽은 낮게 (카메라 쪽으로 영웅을 가리지 않게), 깊은 숲은 높게
+      let near = 9; for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) if (at(x + dx, z + dz)) near = Math.min(near, Math.max(Math.abs(dx), Math.abs(dz)));
+      const n = nz(x * .35, z * .35);
+      if (near === 1) put(R() < .2 ? 'log' : 'leaf', cx, 0, cz);
+      else if (near === 2) { put('log', cx, 0, cz); put('leaf', cx, 1, cz); }
+      else { put('log', cx, 0, cz); put('leaf', cx, 1, cz); put('leaf', cx, 2, cz); if (n > .6) put('leaf', cx, 3, cz); }
+    } else if (t === 1) put(R() < .2 ? 'gravel' : R() < .12 ? 'snow' : 'cobble', cx, -1, cz);
+    else if (t === 2) put(R() < .1 ? 'gravel' : 'grass', cx, -1, cz);
+    else if (t === 3) put('ice', cx, -1, cz);
+    else put('packed', cx, -1, cz);
+  }
+  // 기지: 분수대 팀 색 원
+  M.fountain.forEach((f, t) => { const fx = f.x / 100, fz = f.y / 100; for (let x = -3; x <= 3; x++) for (let z = -3; z <= 3; z++) { const d = Math.hypot(x, z); if (d <= 2.6) put(t ? 'red' : 'blue', Math.floor(fx) + x + .5, -.98, Math.floor(fz) + z + .5); } });
+  const box = new THREE.BoxGeometry(1, 1, 1), m4 = new THREE.Matrix4(), group = new THREE.Group();
+  for (const [t, a] of Object.entries(lists)) {
+    const n = a.length / 3, im = new THREE.InstancedMesh(box, blockMats(t), n);
+    for (let i = 0; i < n; i++) { m4.makeTranslation(a[i * 3], a[i * 3 + 1] + .5, a[i * 3 + 2]); im.setMatrixAt(i, m4); }
+    im.frustumCulled = false; group.add(im);
+  }
+  // 맵 바깥 바닥 (빈 공간이 보이지 않게)
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(N + 120, N + 120), new THREE.MeshLambertMaterial({ color: 0xe9f0f8 })); floor.rotation.x = -Math.PI / 2; floor.position.set(N / 2, -1.01, N / 2); group.add(floor);
+  scene.add(group);
+  return { group, update: () => { } };
+}

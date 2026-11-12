@@ -188,17 +188,17 @@ function mkStruct(kind, team, x, y) {
 }
 /* ---- 정글 몬스터 (팀 2 = 중립) ---- */
 const MONS = {
-  blue: [{ n: '푸른 정령', hp: 1500, ad: 52, r: 62, gold: 100, xp: 200, big: 1 }],
-  red: [{ n: '붉은 골렘', hp: 1600, ad: 58, r: 62, gold: 100, xp: 200, big: 1 }],
-  wolf: [{ n: '늑대', hp: 1000, ad: 38, r: 46, gold: 60, xp: 100, big: 1 }, { n: '새끼 늑대', hp: 380, ad: 16, r: 30, gold: 22, xp: 40, ox: -110, oy: 90 }, { n: '새끼 늑대', hp: 380, ad: 16, r: 30, gold: 22, xp: 40, ox: 110, oy: 90 }],
-  toad: [{ n: '얼음 두꺼비', hp: 1350, ad: 46, r: 56, gold: 85, xp: 160, big: 1 }]
+  blue: [{ n: '푸른 정령', hp: 1500, ad: 52, r: 62, gold: 100, xp: 200, big: 1, top: 2.1 }],
+  red: [{ n: '붉은 골렘', hp: 1600, ad: 58, r: 62, gold: 100, xp: 200, big: 1, top: 2.1 }],
+  wolf: [{ n: '늑대', hp: 1000, ad: 38, r: 46, gold: 60, xp: 100, big: 1, top: 1.1 }, { n: '새끼 늑대', hp: 380, ad: 16, r: 30, gold: 22, xp: 40, ox: -110, oy: 90, top: .7 }, { n: '새끼 늑대', hp: 380, ad: 16, r: 30, gold: 22, xp: 40, ox: 110, oy: 90, top: .7 }],
+  toad: [{ n: '얼음 두꺼비', hp: 1350, ad: 46, r: 56, gold: 85, xp: 160, big: 1, top: 1.1 }]
 };
 export const CAMP_N = { blue: '푸른 정령 (스킬 가속·마나 재생 버프)', red: '붉은 골렘 (평타 둔화·화상 버프)', wolf: '늑대 무리', toad: '얼음 두꺼비' };
 function spawnCamp(c) {
   const mn = G.t / 60; c.units = [];
   for (const m of MONS[c.type]) {
     const x = c.x + (m.ox || 0), y = c.y + (m.oy || 0);
-    const u = mkUnit({ kind: 'monster', mon: c.type, big: !!m.big, name: m.n, team: 2, x, y, home: { x, y }, camp: c, mobile: true, maxHp: m.hp * (1 + mn * .07), ad: m.ad * (1 + mn * .05), def: 10 + mn * 1.2, range: 150, as: .7, r: m.r, ms: 330, gold: m.gold, xp: m.xp * .75 * (1 + mn * .02), face: Math.PI / 2 });
+    const u = mkUnit({ kind: 'monster', mon: c.type, big: !!m.big, top: m.top, name: m.n, team: 2, x, y, home: { x, y }, camp: c, mobile: true, maxHp: m.hp * (1 + mn * .07), ad: m.ad * (1 + mn * .05), def: 10 + mn * 1.2, range: 150, as: .7, r: m.r, ms: 330, gold: m.gold, xp: m.xp * .75 * (1 + mn * .02), face: Math.PI / 2 });
     c.units.push(u); G.units.push(u);
   }
   c.up = true; c.aggro = null;
@@ -289,7 +289,7 @@ function spawnWave() {
 
 /* ================= 전투 도우미 ================= */
 export function canHitStructure(s) { if (s.reqAll && !s.reqAll.every(t => t.dead)) return false; if (s.reqAny && !s.reqAny.some(t => t.dead)) return false; return true; }
-export function targetable(u, t) { return t && !t.dead && t.team !== u.team && (t.mobile || canHitStructure(t)); }
+export function targetable(u, t) { return t && !t.dead && !t.reset && t.team !== u.team && (t.mobile || canHitStructure(t)); } // 캠프로 돌아가는 몬스터는 대상 불가
 function enemiesIn(team, x, y, r, heroOnly) { return G.units.filter(e => !e.dead && e.team !== team && e.mobile && (!heroOnly || e.kind === 'hero') && Math.hypot(e.x - x, e.y - y) < r + e.hr); }
 function alliesIn(team, x, y, r) { return G.heroes.filter(e => !e.dead && e.team === team && Math.hypot(e.x - x, e.y - y) < r + e.r); }
 function stun(t, d) { if (t.mobile && !t.dead) t.cc.stun = Math.max(t.cc.stun, d); }
@@ -335,9 +335,13 @@ function navMove(u, tx, ty, dt) {
     u.navAge = 0; const pts = M.los(u.x, u.y, tx, ty) ? [] : (M.path(u.x, u.y, tx, ty) || []);
     u.nav = { gx: tx, gy: ty, pts };
   }
-  const p = u.nav.pts; while (p.length > 1 && Math.hypot(p[0][0] - u.x, p[0][1] - u.y) < 30) p.shift();
-  if (p.length > 1 || (p.length === 1 && Math.hypot(p[0][0] - tx, p[0][1] - ty) > 60)) { u.face = Math.atan2(p[0][1] - u.y, p[0][0] - u.x); if (moveToward(u, p[0][0], p[0][1], dt)) p.shift(); return false; }
-  return moveToward(u, tx, ty, dt);
+  const p = u.nav.pts; while (p.length > 1 && Math.hypot(p[0][0] - u.x, p[0][1] - u.y) < 6) p.shift();
+  const ox = u.x, oy = u.y, want = effMs(u) * dt; let done;
+  if (p.length > 1 || (p.length === 1 && Math.hypot(p[0][0] - tx, p[0][1] - ty) > 60)) { u.face = Math.atan2(p[0][1] - u.y, p[0][0] - u.x); if (moveToward(u, p[0][0], p[0][1], dt)) p.shift(); done = false; }
+  else done = moveToward(u, tx, ty, dt);
+  // 벽 모서리에 걸려 제대로 못 움직였으면 지금 위치에서 바로 길을 다시 찾음
+  if (!done && want > 1 && Math.hypot(u.x - ox, u.y - oy) < want * .5 && u.cc.root <= 0 && u.cc.stun <= 0) u.navAge = Math.max(u.navAge, .9);
+  return done;
 }
 export function inRange(u, t, extra) { return Math.hypot(t.x - u.x, t.y - u.y) <= u.range + u.r * .5 + t.r + (extra || 0); }
 // 롤식 기본 공격: 선딜(공격 모션) 동안 멈춰 있다가 끝나는 순간 적중/발사. 선딜 중 이동하면 공격이 취소되고 쿨은 돌려받음

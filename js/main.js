@@ -68,6 +68,8 @@ function frame(now) {
     if (S.banner) { S.banner.t -= dt; if (S.banner.t <= 0) S.banner = null; }
     if (S.hint) { S.hint.t -= dt; if (S.hint.t <= 0) S.hint = null; }
     S.mouse = R.pick(S.mx, S.my); S.aimPt = R.pickAt(S.mx, S.my, AIM_H); S.dt = dt;
+    // 우클릭을 누르고 있으면 마우스가 멈춰 있어도 계속 커서 쪽으로 이동 명령 (롤과 같게)
+    if (S.rightDown && playing() && now - (S.dragT || 0) > 100) { S.dragT = now; rightClick(true); }
     R.render(G, S.paused ? 0 : dt, { aiming: S.aiming, mouse: S.aimPt, camOff: S.camOff, camAt: S.camAt });
     hud.draw(G, R, S);
     hoverCursor();
@@ -83,7 +85,7 @@ function unitUnderMouse(filter) {
   let best = null, bd = 1e9;
   for (const u of G.units) {
     if (u.dead || !filter(u)) continue;
-    const top = u.kind === 'hero' ? 1.9 : u.kind === 'minion' ? .9 : u.kind === 'monster' ? (u.big ? 1.9 : .9) : u.kind === 'tower' ? 3.8 : 2.8;
+    const top = u.kind === 'hero' ? 1.9 : u.kind === 'minion' ? .9 : u.kind === 'monster' ? (u.top || 1) : u.kind === 'tower' ? 3.8 : 2.8;
     const a = R.project(u.x, u.y, 0), b = R.project(u.x, u.y, top), e = R.project(u.x + u.hr, u.y, 0);
     const rad = Math.max(16, Math.hypot(e.x - a.x, e.y - a.y) * 1.05);
     const d = segD(S.mx, S.my, a.x, a.y, b.x, b.y) - (u.kind === 'hero' ? 12 : 0);
@@ -105,7 +107,7 @@ function rightClick(drag) {
   // 우클릭을 누른 채 끌 때는 이동만: 지나가는 몬스터·미니언에 붙잡혀 끌려가지 않게 (이미 치던 대상은 유지)
   if (drag && e && e !== p.target) e = null;
   if (!e && !drag) { // 적 영웅 발밑 근처(지름 약 2칸) 바닥을 찍어도 그 영웅을 공격
-    let bd = 1e9; for (const h of G.heroes) { if (!targetable(p, h)) continue; const d = Math.hypot(h.x - S.mouse.x, h.y - S.mouse.y); if (d < h.hr + 90 && d < bd) { bd = d; e = h; } }
+    let bd = 1e9; for (const h of G.heroes) { if (!targetable(p, h)) continue; const d = Math.hypot(h.x - S.mouse.x, h.y - S.mouse.y); if (d < h.hr + 40 && d < bd) { bd = d; e = h; } }
   }
   if (drag && S.pressTarget && !e && Math.hypot(S.mx - S.pressX, S.my - S.pressY) < 60) return; // 누른 채 살짝 움직인 건 무시
   if (e) { cmd(p, { c: 'atk', id: e.id }); if (!drag) R.clickMarker(e.x, e.y, '#f87171'); }
@@ -128,6 +130,8 @@ hudCv.addEventListener('mousedown', e => {
   }
 });
 window.addEventListener('mouseup', e => { if (e.button === 2) S.rightDown = false; if (e.button === 0) S.mmDrag = false; });
+window.addEventListener('blur', () => { S.rightDown = false; S.mmDrag = false; }); // 창 밖에서 버튼을 놓쳐도 계속 따라가지 않게
+window.addEventListener('mousemove', e => { if (S.rightDown && !(e.buttons & 2)) S.rightDown = false; });
 window.addEventListener('blur', () => { S.rightDown = false; S.tab = false; });
 const KIDX = { KeyQ: 0, KeyW: 1, KeyE: 2, KeyR: 3 };
 window.addEventListener('keydown', e => {
@@ -212,7 +216,7 @@ function startGame() {
   Object.assign(S, { aiming: -1, amove: false, paused: false, shopOpen: false, camOff: 0, camAt: null, texts: [], feed: [], banner: null });
   R.reset();
   G = Sim.newGame({ mode: M.mode, pick: M.hero, enemy: M.enemy, diff: M.diff, autoSkill: M.autoSkill, pos: M.pos });
-  window.G = G; window.Sim = Sim; window.R = R; // 디버그/테스트용
+  window.G = G; window.Sim = Sim; window.R = R; window.S = S; // 디버그/테스트용
   openShop();
 }
 function endGame(winner) {

@@ -43,7 +43,7 @@ export function aramMap() {
 
 /* ---------- 협곡 (3라인 + 간단한 정글) ---------- */
 // 블루 기지 왼쪽 아래, 레드 기지 오른쪽 위. 레드 쪽은 블루 쪽을 점대칭(S-x, S-y)으로 뒤집은 것
-export const CELL = 100;
+export const CELL = 50; // 벽 격자 한 칸 (화면의 벽 모양과 실제 이동 가능 영역을 맞추려고 촘촘하게)
 export function riftMap() {
   const S = 7000, N = S / CELL, MIR = p => [S - p[0], S - p[1]];
   const lanes = {
@@ -64,30 +64,59 @@ export function riftMap() {
   const paths = []; for (const p of pathB) { paths.push(p); paths.push(p.map(MIR)); }
   const fountain = [{ x: 350, y: 6650 }, { x: S - 350, y: 350 }];
   const baseC = [[700, 6300], MIR([700, 6300])];
-  // 칸 종류: 0 벽(나무), 1 라인, 2 정글 길, 3 강, 4 기지
-  const grid = new Uint8Array(N * N);
+  // 부호 거리: 음수 = 다닐 수 있는 곳(가장 가까운 모양 안쪽 깊이), 양수 = 벽 안쪽으로 들어간 거리
+  // 화면의 벽 높이와 실제 이동 판정이 모두 이 함수 하나에서 나옴
+  const W_LANE = 310, W_RIVER = 300, W_CAMP = 400, W_PATH = 210, W_BASE = 1150, EDGE = 250;
+  const SH = { lane: W_LANE, river: W_RIVER, camp: W_CAMP, path: W_PATH, base: W_BASE };
+  function sdf(x, y) {
+    let d = 1e9;
+    for (const b of baseC) d = Math.min(d, Math.hypot(x - b[0], y - b[1]) - W_BASE);
+    for (const L of Object.values(lanes)) d = Math.min(d, polyD(L.pts, x, y) - W_LANE);
+    d = Math.min(d, polyD(river, x, y) - W_RIVER);
+    for (const c of camps) d = Math.min(d, Math.hypot(x - c.x, y - c.y) - W_CAMP);
+    for (const p of paths) d = Math.min(d, polyD(p, x, y) - W_PATH);
+    return Math.max(d, EDGE - x, EDGE - y, x - (S - EDGE), y - (S - EDGE));
+  }
+  // 이동 판정용 고해상도 비트맵 (10단위)
+  const FR = 10, FN = S / FR, fine = new Uint8Array(FN * FN);
+  for (let j = 0; j < FN; j++) for (let i = 0; i < FN; i++) fine[j * FN + i] = sdf((i + .5) * FR, (j + .5) * FR) < 0 ? 1 : 0;
+  const walk = (x, y) => { const i = Math.floor(x / FR), j = Math.floor(y / FR); return i >= 0 && j >= 0 && i < FN && j < FN && fine[j * FN + i] === 1; };
+  // 길찾기용 격자: 칸 가운데가 다닐 수 있으면 열림. 종류 0 벽, 1 라인, 2 정글 길, 3 강, 4 기지 (미니맵·바닥 그림용)
+  // open: 칸 전체가 확실히 다닐 수 있는 칸만 (가운데 부호 거리 < -칸 반대각선) → 길찾기 경로가 벽을 스치지 않음
+  const grid = new Uint8Array(N * N), open = new Uint8Array(N * N), HALF = CELL * Math.SQRT1_2;
   for (let cy = 0; cy < N; cy++) for (let cx = 0; cx < N; cx++) {
-    const x = cx * CELL + 50, y = cy * CELL + 50; let t = 0;
-    if (baseC.some(b => Math.hypot(x - b[0], y - b[1]) < 1150)) t = 4;
-    else if (Object.values(lanes).some(L => polyD(L.pts, x, y) < 310)) t = 1;
-    else if (polyD(river, x, y) < 300) t = 3;
-    else if (camps.some(c => Math.hypot(x - c.x, y - c.y) < 400) || paths.some(p => polyD(p, x, y) < 210)) t = 2;
-    if (x < 250 || y < 250 || x > S - 250 || y > S - 250) t = 0;
+    const x = (cx + .5) * CELL, y = (cy + .5) * CELL; let t = 0; const sd = sdf(x, y);
+    open[cy * N + cx] = sd < -HALF ? 1 : 0;
+    if (sd < 0) {
+      if (baseC.some(b => Math.hypot(x - b[0], y - b[1]) < W_BASE)) t = 4;
+      else if (Object.values(lanes).some(L => polyD(L.pts, x, y) < W_LANE)) t = 1;
+      else if (polyD(river, x, y) < W_RIVER) t = 3;
+      else t = 2;
+    }
     grid[cy * N + cx] = t;
   }
   const cellAt = (x, y) => { const cx = Math.floor(x / CELL), cy = Math.floor(y / CELL); return cx < 0 || cy < 0 || cx >= N || cy >= N ? 0 : grid[cy * N + cx]; };
-  const walk = (x, y) => cellAt(x, y) !== 0;
   function nearestCell(x, y) {
     const cx0 = clamp(Math.floor(x / CELL), 0, N - 1), cy0 = clamp(Math.floor(y / CELL), 0, N - 1);
-    if (grid[cy0 * N + cx0]) return [cx0, cy0];
-    for (let r = 1; r < 25; r++) { let best = null, bd = 1e9; for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) { if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue; const cx = cx0 + dx, cy = cy0 + dy; if (cx < 0 || cy < 0 || cx >= N || cy >= N || !grid[cy * N + cx]) continue; const d = Math.hypot((cx + .5) * CELL - x, (cy + .5) * CELL - y); if (d < bd) { bd = d; best = [cx, cy]; } } if (best) return best; }
+    if (open[cy0 * N + cx0]) return [cx0, cy0];
+    for (let r = 1; r < 50; r++) { let best = null, bd = 1e9; for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) { if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue; const cx = cx0 + dx, cy = cy0 + dy; if (cx < 0 || cy < 0 || cx >= N || cy >= N || !open[cy * N + cx]) continue; const d = Math.hypot((cx + .5) * CELL - x, (cy + .5) * CELL - y); if (d < bd) { bd = d; best = [cx, cy]; } } if (best) return best; }
     return [cx0, cy0];
   }
+  // 벽 안의 점 → 가장 가까운 다닐 수 있는 점 (가까운 열린 칸 가운데에서 원래 점 쪽으로 벽 직전까지)
   function clampPt(x, y) {
     x = clamp(x, 40, S - 40); y = clamp(y, 40, S - 40); if (walk(x, y)) return [x, y];
-    const [cx, cy] = nearestCell(x, y); return [clamp(x, cx * CELL + 8, cx * CELL + CELL - 8), clamp(y, cy * CELL + 8, cy * CELL + CELL - 8)];
+    const [cx, cy] = nearestCell(x, y); let ax = (cx + .5) * CELL, ay = (cy + .5) * CELL, bx = x, by = y;
+    for (let i = 0; i < 10; i++) { const mx = (ax + bx) / 2, my = (ay + by) / 2; if (walk(mx, my)) { ax = mx; ay = my; } else { bx = mx; by = my; } }
+    const [dx, dy] = [x - ax, y - ay], l = Math.hypot(dx, dy) || 1, bk = Math.min(6, l); // 경계에서 살짝 안쪽
+    const px = ax - dx / l * bk, py = ay - dy / l * bk; return walk(px, py) ? [px, py] : [(cx + .5) * CELL, (cy + .5) * CELL];
   }
-  function los(x0, y0, x1, y1) { const d = Math.hypot(x1 - x0, y1 - y0), n = Math.ceil(d / 40); for (let i = 1; i <= n; i++) { const k = i / n; if (!walk(x0 + (x1 - x0) * k, y0 + (y1 - y0) * k)) return false; } return true; }
+  // 직선으로 갈 수 있는지: 가운데 선과 양옆 선(여유 cl)을 촘촘히 검사 → 벽 모서리를 스치지 않음
+  function los(x0, y0, x1, y1, cl = 18) {
+    const d = Math.hypot(x1 - x0, y1 - y0), n = Math.ceil(d / 15); if (!d) return walk(x1, y1);
+    const nx = -(y1 - y0) / d * cl, ny = (x1 - x0) / d * cl;
+    for (let i = 1; i <= n; i++) { const k = i / n, x = x0 + (x1 - x0) * k, y = y0 + (y1 - y0) * k; if (!walk(x, y) || (cl && (!walk(x + nx, y + ny) || !walk(x - nx, y - ny)))) return false; }
+    return true;
+  }
   // A* (8방향, 대각선은 양옆이 모두 열려 있을 때만)
   const gS = new Float32Array(N * N), from = new Int32Array(N * N), seen = new Uint32Array(N * N), closed = new Uint32Array(N * N); let stamp = 0;
   function path(x0, y0, x1, y1) {
@@ -96,12 +125,12 @@ export function riftMap() {
     const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let k = 0; for (;;) { const l = 2 * k + 1, r = l + 1; let m = k; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === k) break; [heap[m], heap[k]] = [heap[k], heap[m]]; k = m; } } return top[1]; };
     const h = i => { const dx = Math.abs(i % N - gx), dy = Math.abs(((i / N) | 0) - gy); return (dx + dy) + (Math.SQRT2 - 2) * Math.min(dx, dy); };
     seen[s] = stamp; gS[s] = 0; from[s] = -1; push(s, h(s)); let found = false, it = 0;
-    while (heap.length && it++ < 6000) {
+    while (heap.length && it++ < 40000) {
       const c = pop(); if (closed[c] === stamp) continue; closed[c] = stamp; if (c === g) { found = true; break; }
       const cx = c % N, cy = (c / N) | 0;
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
         if (!dx && !dy) continue; const nx = cx + dx, ny = cy + dy; if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue; const ni = ny * N + nx;
-        if (!grid[ni] || closed[ni] === stamp) continue; if (dx && dy && (!grid[cy * N + nx] || !grid[ny * N + cx])) continue;
+        if (!open[ni] || closed[ni] === stamp) continue; if (dx && dy && (!open[cy * N + nx] || !open[ny * N + cx])) continue;
         const ng = gS[c] + (dx && dy ? Math.SQRT2 : 1); if (seen[ni] === stamp && ng >= gS[ni]) continue;
         seen[ni] = stamp; gS[ni] = ng; from[ni] = c; push(ni, ng + h(ni));
       }
@@ -117,7 +146,7 @@ export function riftMap() {
   }
   const X = (t, p) => t ? MIR(p) : p;
   return {
-    id: 'rift', W: S, H: S, N, grid, cellAt, walk, clampPt, los, path, lanes, river, camps, paths, fountain,
+    id: 'rift', W: S, H: S, N, grid, cellAt, walk, clampPt, los, path, sdf, SH, lanes, river, camps, paths, fountain,
     inBase(t, x, y) { const f = this.fountain[t]; return Math.hypot(x - f.x, y - f.y) < 1000; },
     // 라인 포탑 3개 중 하나라도 부서지면 넥서스 포탑, 넥서스 포탑이 부서지면 넥서스
     structs: t => {

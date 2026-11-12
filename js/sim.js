@@ -728,7 +728,7 @@ function aiMonster(u, dt) {
 }
 
 /* ================= 사람이 조작하는 영웅 ================= */
-function nearestEnemy(u, r) { let best = null, bd = 1e9; for (const e of G.units) { if (!targetable(u, e)) continue; const d = Math.hypot(e.x - u.x, e.y - u.y) - e.r; if (d < r && d < bd) { bd = d; best = e; } } return best; }
+function nearestEnemy(u, r, noMon) { let best = null, bd = 1e9; for (const e of G.units) { if (!targetable(u, e) || (noMon && e.kind === 'monster')) continue; const d = Math.hypot(e.x - u.x, e.y - u.y) - e.r; if (d < r && d < bd) { bd = d; best = e; } } return best; }
 function humanCtl(u, dt) {
   if (u.pend) { // 대상 지정 스킬: 사거리 안으로 걸어간 뒤 시전
     const t = G.units.find(e => e.id === u.pend.tid), ab = u.hd.ab[u.pend.i];
@@ -744,7 +744,7 @@ function humanCtl(u, dt) {
     u.face = Math.atan2(u.moveTo.y - u.y, u.moveTo.x - u.x);
     if (navMove(u, u.moveTo.x, u.moveTo.y, dt)) { u.moveTo = null; u.amove = false; } return;
   }
-  if (u.wind) return; const e = nearestEnemy(u, u.range + u.r * .5); if (e && inRange(u, e) && u.atkCd <= 0 && u.cc.stun <= 0) startAttack(u, e);
+  if (u.wind) return; const e = nearestEnemy(u, u.range + u.r * .5, true); if (e && inRange(u, e) && u.atkCd <= 0 && u.cc.stun <= 0) startAttack(u, e);
 }
 
 /* ================= 업데이트 ================= */
@@ -838,7 +838,8 @@ function physics() {
     const a = mob[i]; for (let j = i + 1; j < mob.length; j++) {
       const b = mob[j]; const rr = (a.r + b.r) * .75, dx = b.x - a.x, dy = b.y - a.y; if (Math.abs(dx) > rr || Math.abs(dy) > rr) continue; const d = Math.hypot(dx, dy) || .01; if (d < rr) {
         const o = (rr - d) / 2, nx = dx / d, ny = dy / d;
-        const wa = a.dash ? 0 : (a.kind === 'hero' && b.kind === 'minion' ? 0 : b.kind === 'hero' && a.kind === 'minion' ? 2 : 1), wb = b.dash ? 0 : (b.kind === 'hero' && a.kind === 'minion' ? 0 : a.kind === 'hero' && b.kind === 'minion' ? 2 : 1); a.x -= nx * o * wa; a.y -= ny * o * wa; b.x += nx * o * wb; b.y += ny * o * wb;
+        const la = a.kind === 'minion' || a.kind === 'monster', lb = b.kind === 'minion' || b.kind === 'monster'; // 영웅은 미니언·몬스터에게 밀리지 않음
+        const wa = a.dash ? 0 : (a.kind === 'hero' && lb ? 0 : b.kind === 'hero' && la ? 2 : 1), wb = b.dash ? 0 : (b.kind === 'hero' && la ? 0 : a.kind === 'hero' && lb ? 2 : 1); a.x -= nx * o * wa; a.y -= ny * o * wa; b.x += nx * o * wb; b.y += ny * o * wb;
       }
     }
   }

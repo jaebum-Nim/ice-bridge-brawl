@@ -1,6 +1,7 @@
 // Three.js 3D 렌더러
 import * as THREE from 'three';
-import { buildBlockWorld, buildRiftWorld } from './blocks.js';
+import { buildBlockWorld } from './blocks.js';
+import { buildRiftTerrain } from './terrain.js';
 import { K, glowTex, glowSprite, mat, emis, buildMinion, buildTower, buildNexus, buildMonster } from './models.js';
 import { buildHero } from './heroes3d.js';
 import { MAP_W, LANE_Y1, LANE_Y2, MID_Y, FOUNTAIN, TEAMC, clampPt, pickTarget } from './sim.js';
@@ -82,15 +83,16 @@ export class Renderer {
     if (this.mapId === M.id) return; this.mapId = M.id;
     if (this.worldG) { this.scene.remove(this.worldG); this.worldG.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
     const grp = new THREE.Group(); this.worldG = grp;
-    this.world = M.grid ? buildRiftWorld(grp, M) : buildBlockWorld(grp, M.W * K, TEAMC);
+    this.world = M.grid ? buildRiftTerrain(grp, M, K, this.r.capabilities.getMaxAnisotropy()) : buildBlockWorld(grp, M.W * K, TEAMC);
     // 분수: 신호기처럼 위로 뻗는 빛 기둥 (단순 반투명 기둥)
     for (const t of [0, 1]) {
       const f = M.fountain[t], tc = new THREE.Color(TEAMC[t]);
-      const beam = new THREE.Mesh(new THREE.BoxGeometry(.9, 30, .9), new THREE.MeshBasicMaterial({ color: tc, transparent: true, opacity: .35, blending: THREE.AdditiveBlending, depthWrite: false })); beam.position.set(f.x * K, 15, f.y * K); grp.add(beam);
-      const core = new THREE.Mesh(new THREE.BoxGeometry(.4, 30, .4), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .6, blending: THREE.AdditiveBlending, depthWrite: false })); core.position.copy(beam.position); grp.add(core);
+      const beam = new THREE.Mesh(new THREE.BoxGeometry(.9, 30, .9), new THREE.MeshBasicMaterial({ color: tc, transparent: true, opacity: M.grid ? .12 : .35, blending: THREE.AdditiveBlending, depthWrite: false })); beam.position.set(f.x * K, 15, f.y * K); grp.add(beam);
+      const core = new THREE.Mesh(new THREE.BoxGeometry(.4, 30, .4), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: M.grid ? .15 : .6, blending: THREE.AdditiveBlending, depthWrite: false })); core.position.copy(beam.position); grp.add(core);
     }
     this.scene.add(grp);
-    this.scene.fog.near = M.grid ? 22 : 26; this.scene.fog.far = M.grid ? 52 : 62;
+    this.scene.fog.near = M.grid ? 30 : 26; this.scene.fog.far = M.grid ? 70 : 62;
+    const bg = M.grid ? 0x2a3b22 : 0x9ec7ff; this.scene.background = new THREE.Color(bg); this.scene.fog.color = new THREE.Color(M.grid ? 0x2a3b22 : 0xbcd8ff);
   }
   buildAim() {
     const g = new THREE.Group(); g.visible = false; this.scene.add(g);

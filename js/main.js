@@ -102,7 +102,9 @@ function hoverCursor() { if (!playing()) return; const e = unitUnderMouse(u => t
 function rightClick(drag) {
   const p = G.player; if (p.dead) return; S.aiming = -1; S.amove = false;
   let e = unitUnderMouse(u => targetable(p, u));
-  if (!e) { // 적 영웅 발밑 근처(지름 약 2칸) 바닥을 찍어도 그 영웅을 공격
+  // 우클릭을 누른 채 끌 때는 이동만: 지나가는 몬스터·미니언에 붙잡혀 끌려가지 않게 (이미 치던 대상은 유지)
+  if (drag && e && e !== p.target) e = null;
+  if (!e && !drag) { // 적 영웅 발밑 근처(지름 약 2칸) 바닥을 찍어도 그 영웅을 공격
     let bd = 1e9; for (const h of G.heroes) { if (!targetable(p, h)) continue; const d = Math.hypot(h.x - S.mouse.x, h.y - S.mouse.y); if (d < h.hr + 90 && d < bd) { bd = d; e = h; } }
   }
   if (drag && S.pressTarget && !e && Math.hypot(S.mx - S.pressX, S.my - S.pressY) < 60) return; // 누른 채 살짝 움직인 건 무시

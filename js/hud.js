@@ -44,7 +44,7 @@ export class Hud {
     // 눈 (화면 공간)
     if (!this.snow) { this.snow = []; for (let i = 0; i < 140; i++) this.snow.push({ x: Math.random(), y: Math.random(), s: .6 + Math.random() * 2, v: .02 + Math.random() * .05 }); }
     c.fillStyle = 'rgba(235,243,255,.6)';
-    for (const f of this.snow) { if (!S.paused) { f.y += f.v * S.dt; f.x += Math.sin(G.t * .7 + f.y * 9) * .0004; } if (f.y > 1) f.y = 0; c.beginPath(); c.arc((((f.x % 1) + 1) % 1) * W, f.y * H, f.s, 0, 7); c.fill(); }
+    if (!G.map.grid) for (const f of this.snow) { if (!S.paused) { f.y += f.v * S.dt; f.x += Math.sin(G.t * .7 + f.y * 9) * .0004; } if (f.y > 1) f.y = 0; c.beginPath(); c.arc((((f.x % 1) + 1) % 1) * W, f.y * H, f.s, 0, 7); c.fill(); }
     // 상단 점수
     const mm = Math.floor(G.t / 60), ss = Math.floor(G.t % 60);
     this.rr(W / 2 - 120, 8, 240, 44, 12); c.fillStyle = 'rgba(8,14,28,.82)'; c.fill();
@@ -54,7 +54,7 @@ export class Hud {
     let mw, mh, mx, my; const M = G.map;
     if (M.grid) { // 협곡: 정사각형 미니맵 (클릭하면 카메라 이동)
       mw = mh = Math.min(200, W * .22, H * .3); mx = W - mw - 12; my = 10;
-      if (!this.mmImg || this.mmImg.map !== M) { const cv = document.createElement('canvas'); cv.width = cv.height = M.N; const g = cv.getContext('2d'); const col = ['#1f3b2c', '#8b93a3', '#c9d6e3', '#7fb3ea', '#9fb3cc']; for (let y = 0; y < M.N; y++) for (let x = 0; x < M.N; x++) { g.fillStyle = col[M.grid[y * M.N + x]]; g.fillRect(x, y, 1, 1); } this.mmImg = { cv, map: M }; }
+      if (!this.mmImg || this.mmImg.map !== M) { const cv = document.createElement('canvas'); cv.width = cv.height = M.N; const g = cv.getContext('2d'); const col = ['#2c4224', '#8a7a5c', '#66713f', '#2f6f93', '#5b626e']; for (let y = 0; y < M.N; y++) for (let x = 0; x < M.N; x++) { g.fillStyle = col[M.grid[y * M.N + x]]; g.fillRect(x, y, 1, 1); } this.mmImg = { cv, map: M }; }
       this.rr(mx - 4, my - 4, mw + 8, mh + 8, 8); c.fillStyle = 'rgba(8,14,28,.9)'; c.fill();
       c.imageSmoothingEnabled = false; c.drawImage(this.mmImg.cv, mx, my, mw, mh); c.imageSmoothingEnabled = true;
       this.mmRect = { x: mx, y: my, w: mw, h: mh, W: M.W, H: M.H };

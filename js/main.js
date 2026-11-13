@@ -123,10 +123,11 @@ hudCv.addEventListener('mousedown', e => {
     else { S.camAt = hh.minimap; S.mmDrag = true; } return;
   }
   if (hh) { if (hh.lvl !== undefined && e.button === 0) cmd(p, { c: 'lvl', i: hh.lvl }); return; }
-  if (e.button === 2 || (e.button === 0 && S.aiming < 0 && !S.amove)) { S.rightDown = e.button === 2; S.pressX = S.mx; S.pressY = S.my; rightClick(false); S.pressTarget = !!G.player.target; return; }
+  if (e.button === 2) { S.rightDown = true; S.pressX = S.mx; S.pressY = S.my; rightClick(false); S.pressTarget = !!G.player.target; return; }
   else if (e.button === 0) {
     if (S.aiming >= 0) { castNow(S.aiming); S.aiming = -1; }
     else if (S.amove && !p.dead) { cmd(p, { c: 'amove', x: S.mouse.x, y: S.mouse.y }); S.amove = false; R.clickMarker(S.mouse.x, S.mouse.y, '#f87171'); }
+    else S.sel = unitUnderMouse(() => true); // 좌클릭: 상태 보기만 (이동·공격 없음). 빈 바닥을 누르면 선택 해제
   }
 });
 window.addEventListener('mouseup', e => { if (e.button === 2) S.rightDown = false; if (e.button === 0) S.mmDrag = false; });
@@ -172,7 +173,7 @@ function renderShop() {
 }
 
 /* ---------------- 메뉴 ---------------- */
-const M = { mode: '1v1', hero: 'graff', enemy: 'random', diff: 1, autoSkill: false, pos: 'mid' };
+const M = { mode: 'rift', hero: 'rosa', enemy: 'random', diff: 1, autoSkill: false, pos: 'bot' };
 try { M.autoSkill = localStorage.getItem('ibb-autoskill') === '1'; } catch (e) { }
 function heroCards(sel, attr) {
   let h = '';
@@ -180,14 +181,14 @@ function heroCards(sel, attr) {
   h += `<div class="card ${sel === 'random' ? 'sel' : ''}" data-${attr}="random"><div class="top"><div class="av" style="background:#e6eefc">?</div><div><b>무작위</b><div class="role">랜덤</div></div></div><div class="d">어떤 영웅이 걸릴지 모릅니다.</div></div>`;
   return h;
 }
-const POS_HINT = { top: '추천: 그라프·바르칸·로칸·브락스', jungle: '추천: 니야·로칸·바르칸·브락스 (강타)', mid: '추천: 솔린·니야·카이라', bot: '추천: 카이라·솔린 (서포터와 함께)', sup: '추천: 테라·그라프·솔린' };
+const POS_HINT = { top: '추천: 그라프·바르칸·로칸·브락스·레오닉', jungle: '추천: 니야·로칸·바르칸·브락스·레오닉 (강타)', mid: '추천: 솔린·니야·카이라·레오닉', bot: '추천: 로사·카이라 (서포터와 함께)', sup: '추천: 테라·그라프·레오닉·솔린' };
 function buildMenu() {
   const m = $('menu');
   m.innerHTML = `<div class="panel"><h1>얼음 다리 난투 <small>3D</small></h1><p class="sub">얼어붙은 협곡 위 단 하나의 다리. 상대 넥서스를 먼저 부수면 승리합니다.</p>
   <div class="tabs">
+    <button data-mode="rift" class="${M.mode === 'rift' ? 'on' : ''}">🌲 협곡 5대5 <em>탑·정글·미드·원딜·서폿</em></button>
     <button data-mode="1v1" class="${M.mode === '1v1' ? 'on' : ''}">⚔ AI와 1대1</button>
     <button data-mode="5v5" class="${M.mode === '5v5' ? 'on' : ''}">👥 칼바람 5대5</button>
-    <button data-mode="rift" class="${M.mode === 'rift' ? 'on' : ''}">🌲 협곡 5대5 <em>15분</em></button>
     <button disabled title="다음 업데이트에서 추가됩니다">🌐 온라인 1대1 <em>준비 중</em></button>
   </div>
   ${M.mode === 'rift' ? `<h3>포지션</h3><div class="row" style="margin:0 0 6px"><div class="seg">${Object.entries(POS).map(([k, n]) => `<button data-p="${k}" class="${M.pos === k ? 'on' : ''}">${n}</button>`).join('')}</div><span class="lbl" style="margin-left:10px">${POS_HINT[M.pos]}</span></div>` : ''}
@@ -199,7 +200,7 @@ function buildMenu() {
   <span class="lbl">스킬 찍기</span><div class="seg"><button data-s="0" class="${!M.autoSkill ? 'on' : ''}">직접 (+ 버튼 / Shift+키)</button><button data-s="1" class="${M.autoSkill ? 'on' : ''}">자동</button></div>
   <div style="flex:1"></div><button class="btn" id="go">게임 시작</button></div>
   <div id="menuErr" class="err"></div>
-  <div class="help"><b>조작법</b><br><kbd>우클릭</kbd>(또는 좌클릭) 이동·공격, 누른 채 끌면 계속 이동 &nbsp; <kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd><kbd>R</kbd> 스킬 (시전 방식은 위에서 선택, 조준 중 <kbd>우클릭</kbd>/<kbd>Esc</kbd> 취소) &nbsp; <kbd>D</kbd> 점멸 &nbsp; <kbd>F</kbd> 눈덩이 (맞춘 뒤 다시 <kbd>F</kbd>로 돌진)<br><kbd>A</kbd>+좌클릭 공격 이동 &nbsp; <kbd>S</kbd> 정지 &nbsp; <kbd>P</kbd> 상점 (기지 또는 사망 시) &nbsp; <kbd>Tab</kbd> 점수판 &nbsp; <kbd>←</kbd><kbd>→</kbd> 카메라, <kbd>Space</kbd> 복귀 &nbsp; <kbd>Esc</kbd> 일시정지 &nbsp; <kbd>Shift</kbd>+<kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd><kbd>R</kbd> 스킬 레벨업<br>${M.mode === 'rift' ? `<b>협곡 규칙</b>: 3개 라인(탑·미드·봇)과 정글. 라인마다 포탑 1개 + 넥서스 앞 포탑 1개. 라인 포탑 중 하나라도 부수면 넥서스 포탑, 그걸 부수면 넥서스를 칠 수 있습니다. <kbd>B</kbd> 귀환(6초) · 분수대에서 빠르게 회복 · 상점은 기지에서만. 정글러는 <kbd>F</kbd> 강타, 나머지는 <kbd>F</kbd> 회복. 푸른 정령(스킬 가속)·붉은 골렘(평타 둔화) 버프. 미니맵 좌클릭 카메라 이동, 우클릭 이동, 방향키 카메라, <kbd>Space</kbd> 내 영웅으로. 10분부터 구조물이 점점 약해져 15분 안팎에 끝납니다.` : `<b>칼바람 규칙</b>: 분수대에서 회복되지 않고 체력은 아주 천천히만 찹니다. 다리 위 초록 구슬은 근처 아군 모두의 체력과 마나를 채웁니다. 상점은 기지를 떠나거나 공격받으면 다음에 죽을 때까지 닫힙니다. 적 분수대에 들어가면 순식간에 녹습니다. 화면이 버벅이면 그래픽을 '낮음'으로 바꿔보세요.`}</div></div>`;
+  <div class="help"><b>조작법</b><br><kbd>우클릭</kbd> 이동·공격 (누르고 있으면 계속 이동), <kbd>좌클릭</kbd> 유닛 상태 보기 &nbsp; <kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd><kbd>R</kbd> 스킬 (시전 방식은 위에서 선택, 조준 중 <kbd>우클릭</kbd>/<kbd>Esc</kbd> 취소) &nbsp; <kbd>D</kbd> 점멸 &nbsp; <kbd>F</kbd> 눈덩이 (맞춘 뒤 다시 <kbd>F</kbd>로 돌진)<br><kbd>A</kbd>+좌클릭 공격 이동 &nbsp; <kbd>S</kbd> 정지 &nbsp; <kbd>P</kbd> 상점 (기지 또는 사망 시) &nbsp; <kbd>Tab</kbd> 점수판 &nbsp; <kbd>←</kbd><kbd>→</kbd> 카메라, <kbd>Space</kbd> 복귀 &nbsp; <kbd>Esc</kbd> 일시정지 &nbsp; <kbd>Shift</kbd>+<kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd><kbd>R</kbd> 스킬 레벨업<br>${M.mode === 'rift' ? `<b>협곡 규칙</b>: 3개 라인(탑·미드·봇)과 정글. 라인마다 포탑 1개 + 넥서스 앞 포탑 1개. 라인 포탑 중 하나라도 부수면 넥서스 포탑, 그걸 부수면 넥서스를 칠 수 있습니다. <kbd>B</kbd> 귀환(6초) · 분수대에서 빠르게 회복 · 상점은 기지에서만. 정글러는 <kbd>F</kbd> 강타, 나머지는 <kbd>F</kbd> 회복. 푸른 정령(스킬 가속)·붉은 골렘(평타 둔화) 버프. 미니맵 좌클릭 카메라 이동, 우클릭 이동, 방향키 카메라, <kbd>Space</kbd> 내 영웅으로. 10분부터 구조물이 점점 약해져 15분 안팎에 끝납니다.` : `<b>칼바람 규칙</b>: 분수대에서 회복되지 않고 체력은 아주 천천히만 찹니다. 다리 위 초록 구슬은 근처 아군 모두의 체력과 마나를 채웁니다. 상점은 기지를 떠나거나 공격받으면 다음에 죽을 때까지 닫힙니다. 적 분수대에 들어가면 순식간에 녹습니다. 화면이 버벅이면 그래픽을 '낮음'으로 바꿔보세요.`}</div></div>`;
   m.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { M.mode = b.dataset.mode; buildMenu(); });
   m.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { M.pos = b.dataset.p; buildMenu(); });
   m.querySelectorAll('[data-h]').forEach(c => c.onclick = () => { M.hero = c.dataset.h; buildMenu(); });
@@ -213,7 +214,7 @@ function buildMenu() {
 function startGame() {
   if (!initGfx()) return;
   $('menu').classList.add('hidden'); $('end').classList.add('hidden');
-  Object.assign(S, { aiming: -1, amove: false, paused: false, shopOpen: false, camOff: 0, camAt: null, texts: [], feed: [], banner: null });
+  Object.assign(S, { sel: null, aiming: -1, amove: false, paused: false, shopOpen: false, camOff: 0, camAt: null, texts: [], feed: [], banner: null });
   R.reset();
   G = Sim.newGame({ mode: M.mode, pick: M.hero, enemy: M.enemy, diff: M.diff, autoSkill: M.autoSkill, pos: M.pos });
   window.G = G; window.Sim = Sim; window.R = R; window.S = S; // 디버그/테스트용

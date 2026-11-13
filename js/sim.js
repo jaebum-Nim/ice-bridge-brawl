@@ -6,9 +6,9 @@ export const MAP_W = 6000, LANE_Y1 = 250, LANE_Y2 = 1150, MID_Y = 700;
 export const FOUNTAIN = [{ x: 170, y: MID_Y }, { x: MAP_W - 170, y: MID_Y }];
 export const TEAMC = ['#4aa3ff', '#ff5a5a', '#d6a85c']; // 2 = 중립(정글 몬스터)
 export const TEAMN = ['블루 팀', '레드 팀', '중립'];
-export const POS = { top: '탑', jungle: '정글', mid: '미드', bot: '원딜', sup: '서포터' };
+export const POS = { top: '탑', jungle: '정글', mid: '미드', bot: '원거리 딜러', sup: '서포터' }; // 협곡 5인 포지션
 // 포지션별 AI 영웅 후보 (앞쪽이 우선)
-const POS_POOL = { top: ['graff', 'valkan', 'rokan', 'braks'], jungle: ['niya', 'rokan', 'valkan', 'braks'], mid: ['solin', 'niya', 'kaira'], bot: ['kaira', 'solin'], sup: ['tera', 'graff', 'solin'] };
+const POS_POOL = { top: ['graff', 'valkan', 'rokan', 'braks', 'leonik'], jungle: ['niya', 'rokan', 'valkan', 'braks', 'leonik'], mid: ['solin', 'niya', 'kaira', 'leonik'], bot: ['rosa', 'kaira', 'solin'], sup: ['tera', 'graff', 'leonik', 'solin'] };
 export const DIFF = [
   { name: '쉬움', react: .5, acc: .2, err: 150, dmg: .8, dodge: 0, agg: .8 },
   { name: '보통', react: .3, acc: .7, err: 70, dmg: 1, dodge: .35, agg: 1 },
@@ -96,7 +96,7 @@ export const HEROES = [
     { n: '대지의 숨결', cd: 70, desc: '넓은 범위의 아군을 크게 치유하고 주변 적에게 피해를 줍니다.', ai: { t: 'heal', range: 800, th: .45 },
       cast(u) { for (const a of alliesIn(u.team, u.x, u.y, 850)) { heal(a, S(u, 132, 21) + u.ap * .6); fx('heal', a.x, a.y, { c: '#86efac' }); } aoeNow(u, u.x, u.y, 500, t => dmg(u, t, S(u, 140, 22) + u.ap * .4, 'm'), '#86efac'); fx('nova', u.x, u.y, { r: 850, c: '#86efac' }); } }] }),
   // 무기의 달인: 평타를 칠수록 빨라지고, 반격 태세로 평타를 흘려낸 뒤 주변을 기절시킴
-  HD({ id: 'rokan', name: '로칸', role: 'fighter', ad: 92, adL: 6.8, color: '#5eead4', desc: '평타가 쌓일수록 강해지는 쇠봉의 달인',
+  HD({ id: 'rokan', name: '로칸', role: 'fighter', ad: 94, adL: 7, color: '#5eead4', desc: '평타가 쌓일수록 강해지는 쇠봉의 달인',
     passive: '연속 공격: 기본 공격이 적중할 때마다 공격 속도 +5% (최대 8중첩, 2.5초 유지)',
     onHit(u, t) {
       let b = u.buffs.find(x => x.type === 'as' && x.tag === 'rokan'); if (!b) { b = { type: 'as', tag: 'rokan', n: 0, v: 0, t: 2.5 }; u.buffs.push(b); }
@@ -112,7 +112,7 @@ export const HEROES = [
     { n: '무기의 달인', cd: 70, desc: '8초간 방어력이 크게 오릅니다. (6레벨부터 세 번째 기본 공격마다 추가 마법 피해)', ai: { t: 'buffFight' },
       cast(u) { buff(u, 'def', S(u, 25, 4), 8); fx('aura', u.x, u.y, { c: '#5eead4', follow: u.id, dur: 8 }); fx('ring', u.x, u.y, { r: 120, c: '#5eead4' }); } }] }),
   // 학살자: 출혈을 쌓고, 원형 베기로 회복하며 버티고, 단두대로 마무리 (처치 시 초기화)
-  HD({ id: 'braks', name: '브락스', role: 'fighter', color: '#e11d48', desc: '출혈을 쌓아 단두대로 끝내는 도끼 학살자',
+  HD({ id: 'braks', name: '브락스', role: 'fighter', ad: 85, color: '#e11d48', desc: '출혈을 쌓아 단두대로 끝내는 도끼 학살자',
     passive: '출혈: 공격과 스킬이 출혈을 1중첩(최대 5) 남겨 5초간 지속 피해. 영웅에게 5중첩이면 5초간 공격력이 크게 오름',
     onHit(u, t) { addBleed(u, t, u.buffs.some(b => b.tag === 'might') ? 5 : 1); }, ab: [
     { n: '원형 베기', cd: 9, desc: '잠시 후 도끼를 크게 휘두릅니다. 날 부분(바깥쪽)에 맞은 적은 큰 피해와 출혈을 입고, 맞힌 영웅 수만큼 체력을 회복합니다.', ai: { t: 'ring', r: 425 },
@@ -123,15 +123,49 @@ export const HEROES = [
       cast(u, tx, ty) { const a0 = Math.atan2(ty - u.y, tx - u.x); let n = 0; for (const t of enemiesIn(u.team, u.x, u.y, 535)) { let da = Math.atan2(t.y - u.y, t.x - u.x) - a0; while (da > Math.PI) da -= Math.PI * 2; while (da < -Math.PI) da += Math.PI * 2; if (Math.abs(da) > .5 && Math.hypot(t.x - u.x, t.y - u.y) > u.r + t.r + 20) continue; const [nx, ny] = norm(t.x - u.x, t.y - u.y); dashTo(t, u.x + nx * (u.r + t.r + 40), u.y + ny * (u.r + t.r + 40), 1800, null, true); slow(t, .4, 1); n++; } fx('cone', u.x, u.y, { a: a0, r: 535, c: '#fb7185' }); } },
     { n: '단두대', cd: 60, desc: '적 영웅에게 뛰어올라 고정 피해를 줍니다. 출혈 중첩마다 피해 20% 증가, 처치하면 재사용 대기시간이 초기화됩니다.', ai: { t: 'exec', range: 460 },
       est(u, t) { const n = t.bleed && t.bleed.src === u ? t.bleed.n : 0; return (S(u, 120, 24) + AD(u) * .75) * (1 + .2 * n); },
-      cast(u, tx, ty) { if (u.cc.root > 0) return false; const t = pickTarget(u, tx, ty, 460, true); if (!t) return false; const ab = this; dashTo(u, t.x, t.y, 2200, () => { if (t.dead) return; const a = ab.est(u, t); fx('sword', t.x, t.y, { c: '#fb7185' }); dmg(u, t, a, 't'); if (t.dead) { u.cds[3] = 0; ev({ t: 'banner', s: '단두대 초기화!', c: '#fb7185', d: 1.5, to: u.id }); } else addBleed(u, t, 1); }, false, t); u.leapT = G.t; } }] })
+      cast(u, tx, ty) { if (u.cc.root > 0) return false; const t = pickTarget(u, tx, ty, 460, true); if (!t) return false; const ab = this; dashTo(u, t.x, t.y, 2200, () => { if (t.dead) return; const a = ab.est(u, t); fx('sword', t.x, t.y, { c: '#fb7185' }); dmg(u, t, a, 't'); if (t.dead) { u.cds[3] = 0; ev({ t: 'banner', s: '단두대 초기화!', c: '#fb7185', d: 1.5, to: u.id }); } else addBleed(u, t, 1); }, false, t); u.leapT = G.t; } }] }),
+  // 창과 방패의 전쟁 군주: 창 던지기, 방패 도약 기절, 방패 막기, 먼 거리 강하
+  HD({ id: 'leonik', name: '레오닉', role: 'fighter', ad: 90, adL: 6.4, color: '#f59e0b', desc: '창을 던지고 방패로 뛰어드는 전쟁 군주',
+    passive: '불굴의 의지: 기본 공격과 Q 사용으로 의지가 쌓이고, 5개가 되면 다음 Q는 피해 50% 증가, W는 기절 1.5초',
+    onHit(u) { u.will = Math.min(5, (u.will || 0) + 1); }, ab: [
+    { n: '혜성 창', cd: 6, desc: '창을 던져 처음 맞은 적에게 피해를 줍니다. 체력 25% 이하인 적에게는 피해가 60% 커집니다.', ai: { t: 'shot', range: 1100, speed: 2400, w: 60, wc: 1 },
+      cast(u, tx, ty) { const emp = (u.will || 0) >= 5; u.will = emp ? 0 : Math.min(5, (u.will || 0) + 1); const [dx, dy] = aimDir(u, tx, ty); proj({ owner: u, x: u.x, y: u.y, dx, dy, speed: 2400, range: 1100, r: 30, color: emp ? '#fde047' : '#fbbf24', kind: 'arrow', onHit(t) { let a = S(u, 70, 26) + AD(u) * 1.1; if (t.hp / t.maxHp < .25) a *= 1.6; if (emp) a *= 1.5; dmg(u, t, a, 'p'); if (emp) fx('ring', t.x, t.y, { r: 80, c: '#fde047' }); } }); } },
+    { n: '방패 도약', cd: 12, desc: '대상에게 뛰어올라 방패로 내리찍어 피해를 주고 1초간 기절시킵니다.', ai: { t: 'target', range: 600 },
+      cast(u, tx, ty) { if (u.cc.root > 0) return false; const t = pickTarget(u, tx, ty, 600, false); if (!t) return false; const emp = (u.will || 0) >= 5; if (emp) u.will = 0; dashTo(u, t.x, t.y, 2200, () => { if (t.dead) return; dmg(u, t, S(u, 62, 20) + t.maxHp * .045, 'p'); stun(t, emp ? 1.5 : 1); fx('quake', t.x, t.y, { r: 120, c: '#fbbf24' }); }, false, t); u.leapT = G.t; } },
+    { n: '이지스 돌격', cd: 15, desc: '1.5초 동안 방패를 앞세워 받는 피해가 60% 줄고 앞쪽 적을 계속 찌릅니다. 끝날 때 방패로 밀쳐 피해를 주고 둔화시킵니다.', ai: { t: 'cone', range: 420 },
+      cast(u, tx, ty) { const a0 = Math.atan2(ty - u.y, tx - u.x); u.face = a0; buff(u, 'dr', .6, 1.5); buff(u, 'ms', -.6, 1.5); buff(u, 'spin', 0, 1.5, { r: 420, tick: .1, int: .3, cone: { a: a0, w: .8 }, dmgF: () => S(u, 14, 5) + AD(u) * .25, col: '#fbbf24',
+        onEnd: () => { if (u.dead) return; for (const t of coneEnemies(u, a0, 440, .8)) { dmg(u, t, S(u, 40, 14) + AD(u) * .5, 'p'); slow(t, .4, 1); } fx('cone', u.x, u.y, { a: a0, r: 440, c: '#fde047' }); } }); } },
+    { n: '대강하', cd: 90, desc: '하늘로 뛰어올라 1.8초 뒤 먼 곳(최대 3500)에 떨어져 넓은 범위에 큰 피해와 둔화를 줍니다. 떠 있는 동안에는 공격받지 않습니다.', ai: { t: 'aoe', range: 1400, r: 320, delay: 1.8 },
+      cast(u, tx, ty) { if (u.cc.root > 0) return false; const [x, y] = clampPt(u, tx, ty, 3500); u.untarg = 1.8; u.chan = 1.8; u.target = null; u.moveTo = null; u.recall = null; fx('blink', u.x, u.y, { c: '#fbbf24' });
+        zone({ owner: u, x, y, r: 320, delay: 1.8, color: '#fbbf24', onTrigger(ts) { u.x = x; u.y = y; u.px = x; u.py = y; u.untarg = 0; u.chan = 0; u.nav = null; for (const t of ts) { dmg(u, t, S(u, 190, 30) + AD(u) * .9, 'p'); slow(t, .5, 1.5); } fx('quake', x, y, { r: 320, c: '#fbbf24' }); fx('ring', x, y, { r: 320, c: '#fde047' }); } }); } }] }),
+  // 쌍권총 선장: 튕기는 총알, 활보, 총알 비, 부채꼴 총알 세례
+  HD({ id: 'rosa', name: '로사', role: 'adc', color: '#f43f5e', desc: '쌍권총으로 튕겨 쏘고 총알을 퍼붓는 선장',
+    passive: '첫인사: 새로운 대상을 기본 공격하면 추가 물리 피해 (영웅에게 공격력의 60%, 그 외 30%)',
+    onHit(u, t) { if (u.lastTg !== t.id) { u.lastTg = t.id; dmg(u, t, AD(u) * (t.kind === 'hero' ? .6 : .3), 'p'); } }, ab: [
+    { n: '도탄 사격', cd: 6, desc: '대상을 쏘아 피해를 주고, 총알이 뒤쪽의 다른 적(영웅 우선)에게 튕겨 25% 더 큰 피해를 줍니다. 첫 대상을 처치하면 튕긴 총알은 두 배 피해.', ai: { t: 'target', range: 650 },
+      cast(u, tx, ty) { const t = pickTarget(u, tx, ty, 650, false); if (!t) return false; const a = S(u, 36, 16) + AD(u) * 1.1 + u.ap * .35;
+        G.projs.push({ id: G.PID++, homing: true, owner: u, tgt: t, x: u.x, y: u.y, speed: 2000, r: 14, color: '#fda4af', kind: 'auto', z0: 60, cb: () => {
+          dmg(u, t, a, 'p'); const killed = t.dead, [bx, by] = norm(t.x - u.x, t.y - u.y); let best = null, bs = 1e9;
+          for (const e of enemiesIn(u.team, t.x, t.y, 520)) { if (e === t) continue; const ex = e.x - t.x, ey = e.y - t.y, l = Math.hypot(ex, ey) || 1; if ((ex * bx + ey * by) / l < .45) continue; const sc = l - (e.kind === 'hero' ? 400 : 0); if (sc < bs) { bs = sc; best = e; } }
+          if (best) G.projs.push({ id: G.PID++, homing: true, owner: u, tgt: best, sx: t.x, sy: t.y, x: t.x, y: t.y, speed: 1800, r: 14, color: killed ? '#fde047' : '#fda4af', kind: 'auto', z0: 60, cb: () => { dmg(u, best, a * (killed ? 2 : 1.25), killed ? 'crit' : 'p'); fx('ring', best.x, best.y, { r: 60, c: '#fb7185' }); } });
+        } }); } },
+    { n: '활보', cd: 12, desc: '4초간 이동 속도 +35%, 공격 속도 +45%.', ai: { t: 'buffFight' },
+      cast(u) { buff(u, 'ms', .35, 4); buff(u, 'as', .4 + .05 * (u.rank[1] - 1), 4); fx('aura', u.x, u.y, { c: '#fb7185', follow: u.id, dur: 4 }); } },
+    { n: '총알 비', cd: 13, desc: '지정 위치에 2초간 총알을 퍼부어 범위 안 적에게 피해를 주고 40% 둔화시킵니다.', ai: { t: 'aoe', range: 1000, r: 300, delay: .3, wc: 1 },
+      cast(u, tx, ty) { const [x, y] = clampPt(u, tx, ty, 1000); for (let i = 0; i < 4; i++) zone({ owner: u, x, y, r: 300, delay: .3 + i * .5, color: '#fb7185', onTrigger(ts) { for (const t of ts) { dmg(u, t, S(u, 28, 11) + u.ap * .2, 'm'); slow(t, .4, .6); } } }); } },
+    { n: '총알 세례', cd: 75, desc: '2.5초 동안 앞쪽 부채꼴로 총알을 퍼부어 범위 안 적에게 0.25초마다 피해를 줍니다. 쏘는 동안은 움직이거나 공격할 수 없습니다.', ai: { t: 'cone', range: 1150 },
+      cast(u, tx, ty) { const a0 = Math.atan2(ty - u.y, tx - u.x); u.face = a0; u.chan = 2.5; u.target = null; u.moveTo = null; buff(u, 'spin', 0, 2.5, { r: 1250, tick: .05, int: .25, cone: { a: a0, w: .42 }, dmgF: () => S(u, 30, 9) + AD(u) * .35 + u.ap * .12, col: '#fb7185', barrage: 1 }); } }] })
 ];
+// 부채꼴 안의 적 (a0 방향, 반각 w 라디안)
+function coneEnemies(u, a0, r, w) { return enemiesIn(u.team, u.x, u.y, r).filter(t => { let da = Math.atan2(t.y - u.y, t.x - u.x) - a0; while (da > Math.PI) da -= Math.PI * 2; while (da < -Math.PI) da += Math.PI * 2; return Math.abs(da) <= w || Math.hypot(t.x - u.x, t.y - u.y) < u.r + t.r + 20; }); }
 // 마나: 니야·바르칸은 자원 없음. cost = [Q, W, E, R] 기본 소모 (Q·W·E는 랭크마다 +5)
 const MANA = {
   graff: { mp: 320, mpL: 40, cost: [60, 50, 40, 100] }, solin: { mp: 400, mpL: 50, cost: [55, 60, 75, 100] },
   kaira: { mp: 360, mpL: 45, cost: [30, 50, 90, 100] }, tera: { mp: 420, mpL: 50, cost: [60, 70, 60, 100] },
-  rokan: { mp: 360, mpL: 40, cost: [50, 25, 40, 0] }, braks: { mp: 320, mpL: 42, cost: [30, 30, 40, 80] }
+  rokan: { mp: 360, mpL: 40, cost: [50, 25, 40, 0] }, braks: { mp: 320, mpL: 42, cost: [30, 30, 40, 80] },
+  leonik: { mp: 330, mpL: 40, cost: [30, 55, 40, 100] }, rosa: { mp: 340, mpL: 40, cost: [40, 30, 70, 100] }
 };
-const SKILL_ORDER = { valkan: [0, 2, 1], niya: [0, 1, 2], tera: [0, 1, 2], rokan: [0, 2, 1] }; // 나머지는 Q → E → W
+const SKILL_ORDER = { valkan: [0, 2, 1], niya: [0, 1, 2], tera: [0, 1, 2], rokan: [0, 2, 1], rosa: [0, 1, 2] }; // 나머지는 Q → E → W
 for (const h of HEROES) { const m = MANA[h.id]; h.mp = m ? m.mp : 0; h.mpL = m ? m.mpL : 0; h.cost = m ? m.cost : [0, 0, 0, 0]; h.order = SKILL_ORDER[h.id] || [0, 2, 1]; }
 export const HMAP = {}; HEROES.forEach(h => HMAP[h.id] = h);
 export const SELF_T = ['self', 'heal', 'shieldAura', 'engage', 'dr', 'empower', 'counter', 'buffFight', 'ring'];
@@ -289,8 +323,8 @@ function spawnWave() {
 
 /* ================= 전투 도우미 ================= */
 export function canHitStructure(s) { if (s.reqAll && !s.reqAll.every(t => t.dead)) return false; if (s.reqAny && !s.reqAny.some(t => t.dead)) return false; return true; }
-export function targetable(u, t) { return t && !t.dead && !t.reset && t.team !== u.team && (t.mobile || canHitStructure(t)); } // 캠프로 돌아가는 몬스터는 대상 불가
-function enemiesIn(team, x, y, r, heroOnly) { return G.units.filter(e => !e.dead && e.team !== team && e.mobile && (!heroOnly || e.kind === 'hero') && Math.hypot(e.x - x, e.y - y) < r + e.hr); }
+export function targetable(u, t) { return t && !t.dead && !t.reset && !(t.untarg > 0) && t.team !== u.team && (t.mobile || canHitStructure(t)); } // 캠프로 돌아가는 몬스터는 대상 불가
+function enemiesIn(team, x, y, r, heroOnly) { return G.units.filter(e => !e.dead && !(e.untarg > 0) && e.team !== team && e.mobile && (!heroOnly || e.kind === 'hero') && Math.hypot(e.x - x, e.y - y) < r + e.hr); }
 function alliesIn(team, x, y, r) { return G.heroes.filter(e => !e.dead && e.team === team && Math.hypot(e.x - x, e.y - y) < r + e.r); }
 function stun(t, d) { if (t.mobile && !t.dead) t.cc.stun = Math.max(t.cc.stun, d); }
 function root(t, d) { if (t.mobile && !t.dead) t.cc.root = Math.max(t.cc.root, d); }
@@ -320,7 +354,7 @@ function addBleed(src, t, n) {
 }
 export function effMs(u) { let b = 0, s = 0; for (const x of u.buffs) if (x.type === 'ms') b += x.v; for (const x of u.cc.slows) s = Math.max(s, x.p); return u.ms * (1 + b) * (1 - s); }
 function moveToward(u, tx, ty, dt) {
-  if (u.cc.root > 0 || u.cc.stun > 0) return false; const dx = tx - u.x, dy = ty - u.y, d = Math.hypot(dx, dy); if (d < 2) return true;
+  if (u.cc.root > 0 || u.cc.stun > 0 || u.chan > 0) return false; const dx = tx - u.x, dy = ty - u.y, d = Math.hypot(dx, dy); if (d < 2) return true;
   const sp = effMs(u) * dt; let nx, ny, done = false; if (sp >= d) { nx = tx; ny = ty; done = true; } else { nx = u.x + dx / d * sp; ny = u.y + dy / d * sp; }
   const M = G.map; if (M.grid && !M.walk(nx, ny)) { // 벽에 막히면 벽을 따라 미끄러짐
     if (M.walk(nx, u.y)) ny = u.y; else if (M.walk(u.x, ny)) nx = u.x; else return false; done = false;
@@ -349,7 +383,7 @@ function windupTime(u) { return Math.min(.3, .22 / asOf(u)); }
 function doAttack(u, dt) {
   const t = u.target; if (!targetable(u, t)) { u.target = null; return false; }
   if (u.wind) return true;
-  if (inRange(u, t)) { u.face = Math.atan2(t.y - u.y, t.x - u.x); if (u.atkCd <= 0 && u.cc.stun <= 0) startAttack(u, t); return true; }
+  if (inRange(u, t)) { if (u.chan > 0) return true; u.face = Math.atan2(t.y - u.y, t.x - u.x); if (u.atkCd <= 0 && u.cc.stun <= 0) startAttack(u, t); return true; }
   navMove(u, t.x, t.y, dt); return true;
 }
 function startAttack(u, t) {
@@ -374,7 +408,7 @@ function autoAttack(u, t) {
 }
 const ABILITY_MULT = .6; // 스킬 피해 비중을 낮추고 평타 비중을 높임
 export function dmg(src, tg, amt, type, auto) {
-  if (!tg || tg.dead) return 0;
+  if (!tg || tg.dead || tg.untarg > 0) return 0;
   if (!tg.mobile && !canHitStructure(tg)) return 0;
   let a = amt;
   if (src && src.kind === 'hero' && !auto) a *= ABILITY_MULT;
@@ -383,7 +417,7 @@ export function dmg(src, tg, amt, type, auto) {
   if (tg.kind === 'monster' && src && src.spells && src.spells.F === 'smite') a *= 1.35; // 정글러는 몬스터에게 더 강함
   if (src && src.kind === 'monster' && tg.kind === 'hero' && tg.spells && tg.spells.F === 'smite') a *= .6;
   if (type !== 't') a *= 100 / (100 + Math.max(0, defOf(tg)));
-  if (!tg.mobile && G.mode === 'rift' && G.t > DECAY_T) a *= 1 + (G.t - DECAY_T) / 75; // 협곡 10분부터 구조물이 점점 약해짐 (15분 안에 끝나도록)
+  if (!tg.mobile && G.mode === 'rift' && G.t > DECAY_T) a *= 1 + (G.t - DECAY_T) / 60; // 협곡 10분부터 구조물이 점점 약해짐 (15분 안에 끝나도록)
   if (type === 'bleed') type = 'p';
   if (type === 'crit') type = 'c';
   for (const b of tg.buffs) if (b.type === 'dr') a *= 1 - b.v;
@@ -410,7 +444,7 @@ function addXp(h, a) {
 }
 function shareXp(team, x, y, amt) { const hs = G.heroes.filter(h => !h.dead && h.team === team && Math.hypot(h.x - x, h.y - y) < 1600); if (!hs.length) return; const each = amt / hs.length * (hs.length > 1 ? 1.25 : 1); for (const h of hs) addXp(h, each); }
 function kill(u, src) {
-  if (u.dead) return; u.dead = true; u.hp = 0; u.deadT = G.t;
+  if (u.dead) return; u.dead = true; u.hp = 0; u.deadT = G.t; u.chan = 0; u.untarg = 0;
   if (u.kind === 'minion') { if (src && src.kind === 'hero') { src.gold += u.gold; src.cs++; if (src.ctl !== 'ai') ev({ t: 'gold', x: u.x, y: u.y, s: '+' + u.gold + 'G', to: src.id }); } shareXp(1 - u.team, u.x, u.y, u.xp); fx('death', u.x, u.y, { c: TEAMC[u.team], small: 1 }); return; }
   if (u.kind === 'monster') {
     const c = u.camp; let k = src && src.kind === 'hero' ? src : c.aggro && !c.aggro.dead ? c.aggro : null;
@@ -468,6 +502,7 @@ function failWhy(u) { return u.dead ? '사망 중' : u.cc.stun > 0 ? '기절 상
 export function tryCast(u, i, tx, ty) {
   u.fail = '';
   if (u.dead || u.cc.stun > 0 || u.dash) { u.fail = failWhy(u); return false; }
+  if (u.chan > 0) { u.fail = '정신 집중 중'; return false; }
   if (u.rank[i] <= 0) { u.fail = i === 3 && u.level < 6 ? '궁극기는 6레벨부터' : '아직 배우지 않은 스킬 (Shift+키 또는 + 버튼)'; return false; }
   if (u.cds[i] > 0) { u.fail = `재사용 대기 중 (${u.cds[i].toFixed(1)}초)`; return false; }
   const cost = costOf(u, i); if (cost > u.mana) { u.fail = `마나 부족 (${cost} 필요)`; return false; }
@@ -541,12 +576,33 @@ function minionSweep(u) {
   }
   return [best, bc];
 }
+// 미니언 이동: 목표 쪽으로 가되 주변 아군 미니언을 피해 옆으로 퍼짐 (뒤에서 밀어붙이며 줄 서지 않게)
+function steerMove(u, tx, ty, dt, stopAt) {
+  if (u.cc.root > 0 || u.cc.stun > 0) return false;
+  const M = G.map, d0 = Math.hypot(tx - u.x, ty - u.y); if (d0 <= (stopAt || 2)) return true;
+  if (M.grid && !M.los(u.x, u.y, tx, ty, 0)) return navMove(u, tx, ty, dt); // 벽 너머면 길찾기
+  let dx = (tx - u.x) / d0, dy = (ty - u.y) / d0, sx = 0, sy = 0;
+  for (const m of G.units) {
+    if (m === u || m.dead || m.team !== u.team || m.kind !== 'minion') continue;
+    const ex = u.x - m.x, ey = u.y - m.y; if (Math.abs(ex) > 90 || Math.abs(ey) > 90) continue;
+    const d = Math.hypot(ex, ey) || .01, rr = (u.r + m.r) * 1.25; if (d >= rr) continue;
+    const ahead = -(ex * dx + ey * dy) / d; // 앞을 막고 있는 미니언일수록 강하게 옆으로 비킴
+    const k = (1 - d / rr) * (1 + Math.max(0, ahead) * 1.5); sx += ex / d * k; sy += ey / d * k;
+    if (ahead > .3) { const side = (dx * ey - dy * ex) >= 0 ? 1 : -1; sx += -dy * side * k * .8; sy += dx * side * k * .8; }
+  }
+  let vx = dx + sx * 1.1, vy = dy + sy * 1.1; if (vx * dx + vy * dy < .15) { vx += dx * .5; vy += dy * .5; } // 뒤로 가지는 않음
+  const vl = Math.hypot(vx, vy) || 1, sp = Math.min(effMs(u) * dt, d0 - (stopAt || 0));
+  let nx = u.x + vx / vl * sp, ny = u.y + vy / vl * sp;
+  if (M.grid && !M.walk(nx, ny)) { if (M.walk(nx, u.y)) ny = u.y; else if (M.walk(u.x, ny)) nx = u.x; else return false; }
+  u.face = Math.atan2(ty - u.y, tx - u.x); u.x = nx; u.y = ny; return false;
+}
 function aiMinion(u, dt) {
-  const now = G.t;
+  const now = G.t, L = G.map.lanes[u.lane];
   if (u.target) {
     const t = u.target; let ok = targetable(u, t) && !(u.ign && u.ign[t.id] > now);
     if (ok && dist(u, t) - t.r > M_LEASH) ok = false; // 멀리 달아남
     if (ok && t.kind === 'hero' && Math.hypot(u.x - u.ax, u.y - u.ay) > M_CHASE) { (u.ign || (u.ign = {}))[t.id] = now + 3; ok = false; } // 영웅을 잡은 자리에서 너무 멀리 끌려감 (롤의 금지 구역 대신)
+    if (ok && t.kind === 'hero' && G.map.grid && laneProj(L, t.x, t.y).d > 480) { (u.ign || (u.ign = {}))[t.id] = now + 2; ok = false; } // 정글 깊이 들어간 영웅은 쫓지 않음
     if (ok && now - Math.max(u.acqT || 0, u.lastAtkT || -9) > M_GIVEUP) { (u.ign || (u.ign = {}))[t.id] = now + 4; ok = false; } // 4초간 못 때림
     if (!ok) { u.target = null; u.tc = 99; u.aiT = 0; }
   }
@@ -555,11 +611,21 @@ function aiMinion(u, dt) {
     u.aiT = .25; const [b, c] = minionSweep(u);
     if (b && (!u.target || c < u.tc)) { if (b !== u.target) { u.target = b; u.acqT = now; u.ax = u.x; u.ay = u.y; } u.tc = c; }
   }
-  if (u.target) doAttack(u, dt);
-  else { // 라인을 따라 전진
-    const L = G.map.lanes[u.lane], dir = u.team ? -1 : 1, pr = laneProj(L, u.x, u.y), p = lanePt(L, pr.s + dir * 260);
-    const tx = p.x - p.dy * u.laneOff, ty = p.y + p.dx * u.laneOff; u.face = Math.atan2(ty - u.y, tx - u.x);
-    if (pr.d > 250) navMove(u, tx, ty, dt); else moveToward(u, tx, ty, dt);
+  u.anchor = false;
+  if (u.target) {
+    const t = u.target;
+    if (u.wind || inRange(u, t)) { u.anchor = true; if (!u.wind) { u.face = Math.atan2(t.y - u.y, t.x - u.x); if (u.atkCd <= 0) startAttack(u, t); } }
+    else { // 대상을 둘러싸듯 접근: 대상에서 내 쪽 방향으로 사거리 안쪽 지점을 목표로
+      // 앞이 막혀 있으면 대상 둘레를 따라 옆자리로 돌아 들어감 (미니언마다 도는 방향이 다름)
+      let a = Math.atan2(u.y - t.y, u.x - t.x); if (u.blockT > .2) a += (u.id % 2 ? 1 : -1) * Math.min(1.3, u.blockT * 1.6);
+      const reach = t.r + u.r * .5 + u.range * .7, ox = u.x, oy = u.y;
+      steerMove(u, t.x + Math.cos(a) * reach, t.y + Math.sin(a) * reach, dt);
+      u.blockT = Math.hypot(u.x - ox, u.y - oy) < effMs(u) * dt * .45 ? (u.blockT || 0) + dt : Math.max(0, (u.blockT || 0) - dt * .5);
+    }
+  } else { // 라인을 따라 전진 (근접 미니언이 앞, 원거리·공성은 그 뒤를 따름)
+    const dir = u.team ? -1 : 1, pr = laneProj(L, u.x, u.y), p = lanePt(L, pr.s + dir * 260);
+    const tx = p.x - p.dy * u.laneOff, ty = p.y + p.dx * u.laneOff;
+    if (pr.d > 250) navMove(u, tx, ty, dt); else steerMove(u, tx, ty, dt);
   }
 }
 function aiTower(u, dt) {
@@ -755,9 +821,10 @@ function humanCtl(u, dt) {
 function tickStatus(u, dt) {
   u.atkCd -= dt; const c = u.cc; c.stun = Math.max(0, c.stun - dt); c.root = Math.max(0, c.root - dt);
   if (u.airT) u.airT = Math.max(0, u.airT - dt);
+  if (u.chan) u.chan = Math.max(0, u.chan - dt); if (u.untarg) u.untarg = Math.max(0, u.untarg - dt); // 정신 집중 / 공중에 떠 있음
   if (c.slows.length) { for (const s of c.slows) s.t -= dt; c.slows = c.slows.filter(s => s.t > 0); }
   if (u.shields.length) { for (const s of u.shields) s.t -= dt; u.shields = u.shields.filter(s => s.t > 0 && s.a > 0); }
-  if (u.buffs.length) { for (const b of u.buffs) { b.t -= dt; if (b.type === 'spin') { b.tick -= dt; if (b.tick <= 0) { b.tick += b.int; for (const t of enemiesIn(u.team, u.x, u.y, b.r)) withRank(u, b.rl, () => dmg(u, t, b.dmgF(), 'p')); if (u.dead) return; } } } const ended = u.buffs.filter(b => b.t <= 0); u.buffs = u.buffs.filter(b => b.t > 0); for (const b of ended) if (b.onEnd) withRank(u, b.rl, () => b.onEnd(b)); }
+  if (u.buffs.length) { for (const b of u.buffs) { b.t -= dt; if (b.type === 'spin') { b.tick -= dt; if (b.tick <= 0) { b.tick += b.int; const ts = b.cone ? coneEnemies(u, b.cone.a, b.r, b.cone.w) : enemiesIn(u.team, u.x, u.y, b.r); for (const t of ts) withRank(u, b.rl, () => dmg(u, t, b.dmgF(), 'p')); if (b.cone) { u.face = b.cone.a; u.castT = G.t; fx('cone', u.x, u.y, { a: b.cone.a, r: b.r, c: b.col, w: b.cone.w }); } if (u.dead) return; } } } const ended = u.buffs.filter(b => b.t <= 0); u.buffs = u.buffs.filter(b => b.t > 0); for (const b of ended) if (b.onEnd) withRank(u, b.rl, () => b.onEnd(b)); }
   if (u.bleed) { const bl = u.bleed; bl.t -= dt; bl.tick -= dt; if (bl.tick <= 0) { bl.tick += 1; const src = bl.src; dmg(src.dead ? null : src, u, (2 + src.level * .7 + AD(src) * .05) * bl.n, 'bleed', true); fx('hit', u.x, u.y, { c: '#e11d48' }); } if (bl.t <= 0 || u.dead) u.bleed = null; }
 }
 function doDash(u, dt) {
@@ -819,7 +886,7 @@ function updateProjs(dt) {
     if (p.homing) { if (p.tgt.dead) { p.done = true; continue; } const dx = p.tgt.x - p.x, dy = p.tgt.y - p.y, d = Math.hypot(dx, dy), st = p.speed * dt; if (d <= st + p.tgt.r * .5) { p.done = true; p.cb(); } else { p.x += dx / d * st; p.y += dy / d * st; } continue; }
     const st = p.speed * dt, ox = p.x, oy = p.y; p.x += p.dx * st; p.y += p.dy * st; p.trav += st;
     const hs = p.shared || p.hit;
-    for (const e of G.units) { if (e.dead || !e.mobile || e.team === p.owner.team || hs.has(e.id)) continue; if (segDist(e.x, e.y, ox, oy, p.x, p.y) < p.r + e.hr) { hs.add(e.id); withRank(p.owner, p.rl, () => p.onHit(e)); fx('hit', e.x, e.y, { c: p.color }); if (--p.pierce <= 0) { p.done = true; break; } } }
+    for (const e of G.units) { if (e.dead || !e.mobile || e.untarg > 0 || e.team === p.owner.team || hs.has(e.id)) continue; if (segDist(e.x, e.y, ox, oy, p.x, p.y) < p.r + e.hr) { hs.add(e.id); withRank(p.owner, p.rl, () => p.onHit(e)); fx('hit', e.x, e.y, { c: p.color }); if (--p.pierce <= 0) { p.done = true; break; } } }
     if (p.trav >= p.range || p.x < -200 || p.x > G.map.W + 200 || p.y < -200 || p.y > G.map.H + 200) p.done = true;
   }
   G.projs = G.projs.filter(p => !p.done);
@@ -843,7 +910,9 @@ function physics() {
       const b = mob[j]; const rr = (a.r + b.r) * .75, dx = b.x - a.x, dy = b.y - a.y; if (Math.abs(dx) > rr || Math.abs(dy) > rr) continue; const d = Math.hypot(dx, dy) || .01; if (d < rr) {
         const o = (rr - d) / 2, nx = dx / d, ny = dy / d;
         const la = a.kind === 'minion' || a.kind === 'monster', lb = b.kind === 'minion' || b.kind === 'monster'; // 영웅은 미니언·몬스터에게 밀리지 않음
-        const wa = a.dash ? 0 : (a.kind === 'hero' && lb ? 0 : b.kind === 'hero' && la ? 2 : 1), wb = b.dash ? 0 : (b.kind === 'hero' && la ? 0 : a.kind === 'hero' && lb ? 2 : 1); a.x -= nx * o * wa; a.y -= ny * o * wa; b.x += nx * o * wb; b.y += ny * o * wb;
+        let wa = a.dash ? 0 : (a.kind === 'hero' && lb ? 0 : b.kind === 'hero' && la ? 2 : 1), wb = b.dash ? 0 : (b.kind === 'hero' && la ? 0 : a.kind === 'hero' && lb ? 2 : 1);
+        // 미니언끼리: 자리 잡고 때리는 쪽은 거의 안 밀리고, 움직이는 쪽이 비켜 감 (떨림 방지)
+        if (la && lb && wa && wb) { const aa = !!(a.anchor), ab = !!(b.anchor); if (aa && !ab) { wa = .4; wb = 1.6; } else if (ab && !aa) { wa = 1.6; wb = .4; } else if (aa && ab) { wa = wb = .5; } } a.x -= nx * o * wa; a.y -= ny * o * wa; b.x += nx * o * wb; b.y += ny * o * wb;
       }
     }
   }

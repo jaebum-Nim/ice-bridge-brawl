@@ -256,6 +256,48 @@ const DESIGN = {
     L.handR.push(P(G_.sph(.05), crim, [1.06, -.03, 0]));
     cape(L, tc, .85, .55, .04);
     return { style: 'slash', scale: 1.06 };
+  },
+  // 창과 방패의 전쟁 군주: 청동 투구 + 붉은 볏, 둥근 방패, 긴 창
+  leonik(L, tc, glow) {
+    const bronze = 0xc08a3e, dk = 0x5b3b1a, red = 0xb91c1c, leather = 0x6b4a2a;
+    baseBody(L, { bulk: 1.1, colors: { body: bronze, pants: leather, arm: SKIN, fore: bronze, boots: dk, hand: leather } });
+    L.hips.push(P(G_.lathe([[.17, .05], [.21, -.08], [.25, -.3], [.001, -.3]], 16), red, [0, 0, 0], [0, 0, 0], [.95, 1, 1.1]));
+    for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; L.hips.push(P(G_.box(.07, .2, .05), bronze, [Math.cos(a) * .2, -.22, Math.sin(a) * .22], [0, -a, 0])); }
+    // 투구: 둥근 청동 + 볼가리개 + 가로 볏
+    L.head.push(P(G_.sph(.178), bronze, [-.005, .045, 0], [0, 0, 0], [1.02, 1.04, 1.02]));
+    for (const z of [-.11, .11]) L.head.push(P(G_.box(.12, .16, .03), bronze, [.1, -.06, z]));
+    L.head.push(P(G_.box(.02, .05, .18), dk, [.17, .02, 0]));
+    L.head.push(P(G_.lathe([[.001, 0], [.05, .02], [.06, .12], [.001, .16]], 12), red, [-.02, .17, 0], [0, 0, 0], [3.3, 1, .45]));
+    for (const k of ['L', 'R']) L['shoulder' + k].push(P(G_.sph(.13), bronze, [0, .03, 0], [0, 0, 0], [1.1, .75, 1.1]));
+    // 둥근 방패 (왼팔)
+    L.elbowL.push(P(G_.cyl(.3, .3, .05, 24), bronze, [.06, -.16, 0], [0, 0, Math.PI / 2]));
+    L.elbowL.push(P(G_.tor(.29, .025, 6, 24), dk, [.09, -.16, 0], [0, Math.PI / 2, 0]));
+    L.elbowL.push(P(G_.sph(.07), red, [.11, -.16, 0], [0, 0, 0], [.6, 1, 1]));
+    // 창: 긴 자루 + 잎 모양 날
+    L.handR.push(P(G_.cyl(.024, .024, 2.0, 8), 0x6b4a2a, [.45, -.03, 0], [0, 0, Math.PI / 2]));
+    L.handR.push(P(G_.cone(.06, .3, 8), 0xe5e7eb, [1.6, -.03, 0], [0, 0, -Math.PI / 2], [1, 1, .45]));
+    L.handR.push(P(G_.sph(.035), red, [1.42, -.03, 0]));
+    cape(L, tc, .95, .55, .04);
+    return { style: 'slash', scale: 1.04 };
+  },
+  // 쌍권총 선장: 넓은 챙 모자, 붉은 머리, 긴 코트, 권총 두 자루
+  rosa(L, tc, glow) {
+    const coat = 0x9f1239, dk = 0x2b1b1f, gold = 0xd4a83a, hair = 0xc2410c, steel = 0x9ca3af;
+    baseBody(L, { bulk: .9, colors: { body: 0xf5e6d3, pants: dk, arm: coat, fore: coat, boots: dk } });
+    L.spine.push(P(G_.lathe([[.001, 0], [.16, 0], [.17, .1], [.2, .38], [.21, .46], [.12, .55], [.001, .56]], 18), coat, [0, 0, 0], [0, 0, 0], [.78, 1, 1.02]));
+    L.spine.push(P(G_.tor(.16, .022), gold, [0, .06, 0], [Math.PI / 2, 0, 0], [.8, 1.05, 1]));
+    L.hips.push(P(G_.lathe([[.16, .06], [.2, -.2], [.27, -.62], [.001, -.62]], 18), coat, [-.03, 0, 0], [0, 0, 0], [.9, 1, 1.05]));
+    // 머리카락 + 모자
+    L.head.push(P(G_.sph(.17), hair, [-.03, .03, 0], [0, 0, 0], [1, 1.04, 1.06]));
+    L.head.push(P(G_.cyl(.14, .07, .5, 14), hair, [-.12, -.26, 0], [0, 0, -.12]));
+    L.head.push(P(G_.cyl(.33, .33, .025, 24), dk, [0, .15, 0], [0, 0, -.06], [1, 1, .85]));
+    L.head.push(P(G_.cyl(.15, .17, .16, 16), dk, [-.01, .24, 0]));
+    L.head.push(P(G_.tor(.165, .015, 6, 24), gold, [-.01, .17, 0], [Math.PI / 2, 0, 0]));
+    L.head.push(P(G_.cone(.03, .32, 6), 0xf5f5f4, [-.12, .32, .08], [0, 0, .9]));
+    // 권총 두 자루 (총구가 팔 방향 → 팔을 들면 앞을 겨눔)
+    for (const k of ['L', 'R']) { L['hand' + k].push(P(G_.box(.06, .34, .06), steel, [.02, -.2, 0])); L['hand' + k].push(P(G_.box(.08, .1, .05), 0x5b3a1e, [-.03, -.02, 0], [0, 0, .3])); L['hand' + k].push(P(G_.sph(.03), gold, [.02, -.05, 0])); }
+    cape(L, tc, .7, .5, .03);
+    return { style: 'gun', scale: .97 };
   }
 };
 
@@ -311,6 +353,9 @@ function animate(R, dt, s) {
       if (k < .45) { const q = k / .45; sR = lerp(sR, -.7, q); eR = lerp(eR, 1.6, q); twist = -.35 * q; }
       else if (k < .65) { const q = (k - .45) / .2; sR = lerp(-.7, 1.55, q); eR = lerp(1.6, .05, q); twist = lerp(-.35, .45, q); }
       else { const q = (k - .65) / .35; sR = lerp(1.55, sR, q); eR = lerp(.05, eR, q); twist = lerp(.45, 0, q); }
+    } else if (st === 'gun') { // 양손 권총: 두 팔을 앞으로 뻗고 쏠 때 반동
+      const rc = Math.sin(Math.min(1, k * 1.6) * Math.PI) * .35;
+      sR = 1.5 - rc; sL = 1.45 - rc * .6; eR = eL = .05; oR = oL = .08; twist = -.1;
     } else if (st === 'bow') {
       sL = 1.55; eL = .05; oL = .05; twist = -.25;
       sR = 1.5; eR = k < .75 ? lerp(.4, 2.3, k / .75) : lerp(2.3, .6, (k - .75) / .25); oR = .05;
@@ -323,6 +368,7 @@ function animate(R, dt, s) {
   if (s.cast >= 0) {
     const k = s.cast, up = Math.sin(Math.min(1, k) * Math.PI);
     if (st === 'bow') { sL = 1.55; sR = 1.5; eR = lerp(2.3, .5, k); eL = .05; twist = -.25; }
+    else if (st === 'gun') { sR = sL = 1.5; eR = eL = .05; oR = oL = .1 + up * .2; }
     else if (st === 'slash' || st === 'slash2' || st === 'punch') { sR = lerp(2.6, -.4, k); eR = .4; twist = lerp(-.4, .5, k); sL = Math.max(sL, up * 1.2); }
     else { sR = Math.max(sR, up * 2.7); eR = .25; sL = Math.max(sL, up * 2.0); eL = .4; oL = .14 + up * .5; }
   }

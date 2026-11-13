@@ -1,5 +1,5 @@
 // 2D 오버레이: 체력바, 피해 숫자, 하단 패널, 미니맵, 알림
-import { MAP_W, LANE_Y1, LANE_Y2, TEAMC, TEAMN, ITEMS, itemStats, need, effMs, canShop, clamp, canLevel, cdOf, costOf, spellOf, smiteDmg, POS, RECALL_T } from './sim.js';
+import { MAP_W, LANE_Y1, LANE_Y2, TEAMC, TEAMN, ITEMS, itemStats, need, effMs, canShop, clamp, canLevel, cdOf, costOf, spellOf, smiteDmg, POS, RECALL_T, ROLE, AD, defOf, asOf, canHitStructure } from './sim.js';
 
 const FONT = 'system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif';
 export class Hud {
@@ -22,7 +22,7 @@ export class Hud {
     c.setTransform(this.DPR, 0, 0, this.DPR, 0, 0); c.clearRect(0, 0, W, H); this.rects = [];
     // 유닛 위 체력바
     for (const u of G.units) {
-      if (u.dead) continue;
+      if (u.dead || u.untarg > 0) continue;
       const hgt = u.kind === 'hero' ? 2.35 : u.kind === 'minion' ? (u.mk === 's' ? 1.0 : .95) : u.kind === 'monster' ? (u.big ? 2.2 : 1.2) : u.kind === 'tower' ? 4.5 : 3.6;
       const s = R.project(u.x, u.y, hgt); if (!s.vis || s.x < -100 || s.x > W + 100 || s.y < -50 || s.y > H + 50) continue;
       const ally = u.team === p.team;
@@ -78,8 +78,32 @@ export class Hud {
     if (S.banner) { const b = S.banner; c.globalAlpha = Math.min(1, b.t * 2, (b.max - b.t) * 4 + .2); c.font = `900 30px ${FONT}`; const bw = c.measureText(b.s).width + 50; this.rr(W / 2 - bw / 2, H * .16 - 36, bw, 52, 12); c.fillStyle = 'rgba(8,14,28,.8)'; c.fill(); this.txt(b.s, W / 2, H * .16, 30, b.c, 'center', 900); c.globalAlpha = 1; }
     if (S.fps) this.txt(`${S.fps} FPS`, 12, 22, 12, S.fps < 30 ? '#fca5a5' : 'rgba(200,214,234,.6)', 'left', 700);
     this.panel(G, S);
+    if (S.sel) this.selInfo(G, R, S);
     if (S.tab) this.score(G);
     if (S.paused && !S.shopOpen) { c.fillStyle = 'rgba(4,8,16,.6)'; c.fillRect(0, 0, W, H); this.txt('일시정지', W / 2, H / 2 - 10, 40, '#e6eefc', 'center', 900); this.txt('Esc 키로 계속하기', W / 2, H / 2 + 24, 15, '#a9bbd6', 'center'); }
+  }
+  // 좌클릭으로 고른 유닛의 상태 창 (왼쪽 위)
+  selInfo(G, R, S) {
+    const u = S.sel; if (!u || (u.dead && u.kind !== 'hero') || !G.units.includes(u)) { S.sel = null; return; }
+    const c = this.ctx, p = G.player, x = 12, y = 40, w = 250;
+    const col = u.team === 2 ? '#e7b75f' : u.team === p.team ? '#60a5fa' : '#f87171';
+    // 선택 표시: 유닛 발밑 흰 원
+    const s0 = R.project(u.x, u.y, 0), s1 = R.project(u.x + u.r * 1.3, u.y, 0); if (s0.vis && !u.dead) { c.save(); c.translate(s0.x, s0.y); c.scale(1, .55); c.beginPath(); c.arc(0, 0, Math.max(14, Math.hypot(s1.x - s0.x, s1.y - s0.y)), 0, 7); c.restore(); c.strokeStyle = 'rgba(255,255,255,.85)'; c.lineWidth = 2; c.setLineDash([6, 4]); c.stroke(); c.setLineDash([]); }
+    const name = u.kind === 'hero' ? `${u.hd.name}${u.pos ? ' · ' + POS[u.pos] : ''}${u === p ? ' (나)' : ''}` : u.kind === 'minion' ? ({ m: '근접', c: '원거리', s: '공성' }[u.mk] + ' 미니언') : u.kind === 'monster' ? u.name : u.kind === 'tower' ? '포탑' : '넥서스';
+    const sub = u.team === 2 ? '중립 몬스터' : (u.team === p.team ? '아군' : '적') + (u.kind === 'hero' ? ` · ${ROLE[u.hd.role]} · ${u.level}레벨` : u.kind === 'tower' && !canHitStructure(u) ? ' · 아직 공격 불가' : '');
+    const rows = [['공격력', Math.round(AD(u))], ['방어력', Math.round(defOf(u))], ['공격 속도', asOf(u).toFixed(2)], ['사거리', Math.round(u.range)]];
+    if (u.mobile) rows.push(['이동 속도', Math.round(effMs(u))]);
+    if (u.kind === 'hero') { rows.splice(1, 0, ['주문력', Math.round(u.ap)]); rows.push(['처치/사망/도움', `${u.k}/${u.d}/${u.a}`]); if (u.pos) rows.push(['CS', u.cs]); }
+    const hasMana = u.kind === 'hero' && u.maxMana > 0, h = 78 + (hasMana ? 10 : 0) + Math.ceil(rows.length / 2) * 18 + (u.kind === 'hero' && u.items.length ? 22 : 0) + (u.buffs.length ? 18 : 0);
+    this.rr(x, y, w, h, 10); c.fillStyle = 'rgba(8,14,28,.9)'; c.fill(); c.strokeStyle = col; c.lineWidth = 1.5; c.stroke();
+    this.txt(name, x + 12, y + 22, 15, '#e6eefc', 'left', 800); this.txt(sub, x + 12, y + 40, 11, col, 'left', 700);
+    c.fillStyle = '#1b2638'; c.fillRect(x + 12, y + 48, w - 24, 12); c.fillStyle = u.team === 2 ? '#e7b75f' : u.team === p.team ? '#4ade80' : '#f87171'; c.fillRect(x + 12, y + 48, (w - 24) * Math.max(0, u.hp / u.maxHp), 12);
+    this.txt(u.dead ? `부활까지 ${Math.ceil(u.respawnT)}초` : `${Math.ceil(u.hp)} / ${Math.round(u.maxHp)}`, x + w / 2, y + 58, 10, '#fff', 'center', 800, 3);
+    let yy = y + 66; if (hasMana) { c.fillStyle = '#1b2638'; c.fillRect(x + 12, yy, w - 24, 6); c.fillStyle = '#60a5fa'; c.fillRect(x + 12, yy, (w - 24) * u.mana / u.maxMana, 6); yy += 10; }
+    rows.forEach(([k, v], i) => { const cx = x + 12 + (i % 2) * (w / 2 - 6), cy = yy + 14 + Math.floor(i / 2) * 18; this.txt(k, cx, cy, 11, '#8ea3c2', 'left', 600); this.txt(String(v), cx + w / 2 - 22, cy, 11, '#e6eefc', 'right', 800); });
+    yy += Math.ceil(rows.length / 2) * 18 + 4;
+    if (u.kind === 'hero' && u.items.length) { this.txt(u.items.map(i => ITEMS[i].n).join(', '), x + 12, yy + 14, 10, '#c7d2fe', 'left', 600); yy += 22; }
+    if (u.buffs.length) { const B = { blueb: '푸른 정령', redb: '붉은 골렘', ms: '이동 속도', ad: '공격력', as: '공격 속도', def: '방어력', dr: '피해 감소', emp: '강화 공격', spin: '회전', dodge: '회피' }; this.txt('효과: ' + [...new Set(u.buffs.map(b => B[b.type] || b.type))].join(', '), x + 12, yy + 12, 10, '#fde68a', 'left', 600); }
   }
   panel(G, S) {
     const c = this.ctx, W = this.W, H = this.H, p = G.player;

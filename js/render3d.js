@@ -190,7 +190,8 @@ export class Renderer {
     // 공중에 뜸 / 끌려감
     R.g.position.y = u.airT > 0 ? Math.sin((1 - u.airT / .75) * Math.PI) * .7 : (u.dash && u.dash.forced ? .2 : 0);
     // 상태 표시
-    const spin = u.buffs.find(b => b.type === 'spin');
+    const spin = u.buffs.find(b => b.type === 'spin' && !b.cone);
+    v.root.visible = !(u.untarg > 0); // 대강하로 하늘에 떠 있는 동안 숨김
     v.spin.visible = !!spin; if (spin) { v.spin.rotation.y += dt * 16; v.spin.scale.setScalar(spin.r * K); v.spin.material.color.set(spin.col); R.g.rotation.y += dt * 22; }
     v.bubble.visible = u.shields.length > 0; if (v.bubble.visible) v.bubble.material.opacity = .12 + Math.sin(t * 6) * .04;
     v.stars.visible = u.cc.stun > 0 && !u.airT; if (v.stars.visible) v.stars.rotation.y += dt * 5;
@@ -279,7 +280,7 @@ export class Renderer {
       case 'death': P.burst(x, .6, z, f.small ? 8 : 26, { c, speed: f.small ? 2 : 4, up: 3, size: f.small ? .3 : .5, life: .7, g: 5 }); break;
       case 'collapse': P.burst(x, 1.5, z, f.big ? 100 : 50, { c, speed: f.big ? 8 : 5, up: 6, size: .6, life: 1.4, g: 6 }); for (let i = 0; i < 18; i++) P.emit(x + (Math.random() - .5) * 2, 2 + Math.random() * 2, z + (Math.random() - .5) * 2, { c: '#94a3b8', vx: (Math.random() - .5) * 4, vz: (Math.random() - .5) * 4, vy: 2 + Math.random() * 3, g: 10, size: .5, life: 1.2, a: .9 }); this.shake = Math.max(this.shake, f.big ? 1.2 : .6); break;
       case 'sword': { const g = this.take('sword', () => { const g = new THREE.Group(); const b = new THREE.Mesh(this.geo.swordBlade, new THREE.MeshBasicMaterial({ color: 0xfde047, transparent: true })); b.position.y = 1.6; g.add(b); g.add(glowSprite(0xfde047, 3, .8)); return g; }); g.position.set(x, 6, z); this.fxl.push({ m: g, t: 0, dur: .5, kind: 'drop' }); this.shake = Math.max(this.shake, .35); break; }
-      case 'cone': { const m = this.fxMesh('coneFx', () => { const g = new THREE.CircleGeometry(1, 24, -.5, 1); g.rotateX(-Math.PI / 2); return decal(g, 0xffffff, .5, true); }, c); m.position.set(x, .06, z); m.scale.setScalar(f.r * K); m.rotation.y = -f.a; this.fxl.push({ m, t: 0, dur: .35, kind: 'fade' }); break; }
+      case 'cone': { const m = this.fxMesh('coneFx', () => { const g = new THREE.CircleGeometry(1, 24, -.5, 1); g.rotateX(-Math.PI / 2); return decal(g, 0xffffff, .5, true); }, c); m.position.set(x, .06, z); m.scale.set(f.r * K, 1, f.r * K * (f.w ? Math.tan(Math.min(1.3, f.w)) / Math.tan(.5) : 1)); m.rotation.y = -f.a; this.fxl.push({ m, t: 0, dur: .35, kind: 'fade' }); break; }
       case 'axe': { ring(f.r * K, .4, 1); const m = this.fxMesh('axeArc', () => decal(new THREE.RingGeometry(.48, 1, 40, 1, 0, 2.2).rotateX(-Math.PI / 2), 0xffffff, .7, true), c); m.position.set(x, .4, z); m.scale.setScalar(f.r * K); this.fxl.push({ m, t: 0, dur: .3, kind: 'sweep' }); for (let i = 0; i < 18; i++) { const a = i / 18 * 6.28; P.emit(x + Math.cos(a) * f.r * K * .8, .6, z + Math.sin(a) * f.r * K * .8, { c, vx: -Math.sin(a) * 4, vz: Math.cos(a) * 4, size: .4, life: .35 }); } this.shake = Math.max(this.shake, .2); break; }
       case 'blades': for (let i = 0; i < 14; i++) { const a = i / 14 * 6.28; P.emit(x, .7, z, { c, vx: Math.cos(a) * 5, vz: Math.sin(a) * 5, size: .35, life: .35, drag: .9 }); } ring(f.r * K, .35); break;
     }

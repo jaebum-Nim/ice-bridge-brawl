@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { buildBlockWorld } from './blocks.js';
 import { buildRiftTerrain } from './terrain.js';
+import { seen as seenUnit, SIGHT, WARD } from './sim.js';
 // iOS·iPadOS 사파리는 캔버스 한 장 1,677만 화소·전체 캔버스 메모리 제한이 있어 바닥 그림을 2048로
 const IOS = typeof navigator !== 'undefined' && (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent)));
 import { K, glowTex, glowSprite, mat, emis, buildMinion, buildTower, buildNexus, buildMonster } from './models.js';
@@ -144,6 +145,37 @@ export class Renderer {
   }
   project(x, y, h) { const v = new THREE.Vector3(x * K, h, y * K).project(this.cam); return { x: (v.x + 1) / 2 * this.W, y: (1 - v.y) / 2 * this.H, vis: v.z < 1 }; }
 
+  /* ---------- 전장의 안개 (협곡): 내 팀 시야 밖을 어둡게 ---------- */
+  updateFog(G, dt) {
+    const M = G.map;
+    if (!G.vis) { if (this.fog) this.fog.visible = false; return; }
+    if (!this.fog || this.fogMap !== M) {
+      if (this.fog) this.scene.remove(this.fog);
+      const n = 140, data = new Uint8Array(n * n * 4), tex = new THREE.DataTexture(data, n, n); tex.magFilter = tex.minFilter = THREE.LinearFilter;
+      // 높이 1.7에 둔 판이 바닥과 겹쳐 보이도록 카메라 쪽(+z)으로 밀어 둠 (카메라 기울기 8.2/12.5)
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(M.W * K, M.H * K), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, depthTest: false }));
+      m.rotation.x = -Math.PI / 2; m.position.set(M.W * K / 2, 1.7, M.H * K / 2 + 1.7 * 8.2 / 12.5); m.renderOrder = 4;
+      this.scene.add(m); this.fog = m; this.fogMap = M; this.fogData = data; this.fogTex = tex; this.fogN = n; this.fogT = 0; this.fogCur = new Float32Array(n * n);
+    }
+    this.fog.visible = true; this.fogT -= dt;
+    const n = this.fogN, cell = M.W / n, cur = this.fogCur, src = G.visSrc ? G.visSrc[G.player.team] : [];
+    if (this.fogT <= 0) { this.fogT = .1; this.fogTarget = this.fogTarget || new Float32Array(n * n); const tg = this.fogTarget; tg.fill(1);
+      for (const [x, y, r] of src) { const i0 = Math.max(0, Math.floor((x - r) / cell)), i1 = Math.min(n - 1, Math.ceil((x + r) / cell)), j0 = Math.max(0, Math.floor((y - r) / cell)), j1 = Math.min(n - 1, Math.ceil((y + r) / cell));
+        for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const d = Math.hypot((i + .5) * cell - x, (j + .5) * cell - y) / r; if (d < 1) { const k = j * n + i, f = d < .85 ? 0 : (d - .85) / .15; if (f < tg[k]) tg[k] = f; } } } }
+    // 부드럽게 따라감 (깜빡임 방지)
+    const tg = this.fogTarget, a = Math.min(1, dt * 8), D = this.fogData;
+    if (tg) { for (let k = 0; k < n * n; k++) { cur[k] += (tg[k] - cur[k]) * a; D[k * 4] = 6; D[k * 4 + 1] = 10; D[k * 4 + 2] = 20; D[k * 4 + 3] = cur[k] * 120; } this.fogTex.needsUpdate = true; }
+  }
+  // 와드: 우리 팀 것만 보임
+  syncWards(G) {
+    this.wardViews = this.wardViews || new Map(); const keep = new Set();
+    for (const w of G.wards || []) {
+      if (w.team !== G.player.team) continue; keep.add(w.id); let v = this.wardViews.get(w.id);
+      if (!v) { v = new THREE.Group(); const c = new THREE.Mesh(new THREE.ConeGeometry(.12, .5, 6), new THREE.MeshLambertMaterial({ color: 0xfde68a, emissive: 0x6b5a10 })); c.position.y = .25; v.add(c); const g = glowSprite(0xfde68a, .7, .7); g.position.y = .6; v.add(g); const ring = decal(RING_G, 0xfde68a, .25, true); ring.scale.setScalar(SIGHT.ward * K); ring.position.y = .04; v.add(ring); v.position.set(w.x * K, 0, w.y * K); this.scene.add(v); this.wardViews.set(w.id, v); }
+      v.children[0].rotation.y += .02; v.children[2].material.opacity = .12 + .1 * Math.min(1, w.t / 10);
+    }
+    for (const [id, v] of this.wardViews) if (!keep.has(id)) { this.scene.remove(v); this.wardViews.delete(id); }
+  }
   /* ---------- 유닛 뷰 ---------- */
   viewFor(u) {
     let v = this.views.get(u.id); if (v) return v;
@@ -173,7 +205,7 @@ export class Renderer {
     root.position.set(u.x * K, 0, u.y * K); this.scene.add(root); this.views.set(u.id, v); return v;
   }
   syncUnits(G, dt) {
-    const seen = new Set(), t = G.t;
+    const seen = new Set(), t = G.t, seenBy = (team, u) => seenUnit(team, u);
     for (const u of G.units) {
       seen.add(u.id); const v = this.viewFor(u);
       const p = v.root.position;
@@ -202,6 +234,8 @@ export class Renderer {
       }
     }
     for (const [id, v] of this.views) if (!seen.has(id)) { this.scene.remove(v.root); this.views.delete(id); }
+    // 전장의 안개: 내 팀이 못 보는 적·몬스터는 숨김
+    if (G.vis) { const pt = G.player.team; for (const u of G.units) { if (u.team === pt || !u.mobile || u.dead) continue; const v = this.views.get(u.id); if (v && !seenBy(pt, u)) v.root.visible = false; else if (v && v.kind !== 'hero') v.root.visible = true; } }
   }
   animHero(v, u, dt, t) {
     const R = v.R, sp = Math.hypot(u.vx, u.vy);
@@ -362,6 +396,7 @@ export class Renderer {
   render(G, dt, opts) {
     const p = G.player; this.setMap(G.map);
     this.syncUnits(G, dt); this.syncProjs(G, dt); this.syncZones(G); this.updateFx(G, dt);
+    this.updateFog(G, dt); this.syncWards(G);
     // 회복 구슬
     while (this.relicMeshes.length < G.relics.length) { const g = new THREE.Group(); const m = new THREE.Mesh(new THREE.OctahedronGeometry(.22, 0), new THREE.MeshBasicMaterial({ color: 0x4ade80 })); g.add(m); g.add(glowSprite(0x4ade80, 1.1, .5)); this.scene.add(g); this.relicMeshes.push(g); }
     G.relics.forEach((r, i) => { const g = this.relicMeshes[i]; g.visible = r.on; g.position.set(r.x * K, .7 + Math.sin(G.t * 3 + i) * .12, r.y * K); g.children[0].rotation.y += dt * 2; });

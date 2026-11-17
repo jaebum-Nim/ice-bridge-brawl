@@ -165,6 +165,8 @@ export function riftMap() {
       return [{ id: 'top', kind: 'tower', lane: 'top', ...P([650, 3600]) }, { id: 'mid', kind: 'tower', lane: 'mid', ...P([2400, 4600]) }, { id: 'bot', kind: 'tower', lane: 'bot', ...P([3400, 6350]) },
         { id: 'base', kind: 'tower', lane: 'mid', reqAny: ['top', 'mid', 'bot'], ...P([1350, 5650]) }, { id: 'nexus', kind: 'nexus', reqAll: ['base'], ...P([900, 6100]) }];
     },
-    relics: [], spawn: t => { const [x, y] = X(t, [900, 6100]); return { x, y }; }
+    relics: [], spawn: t => { const [x, y] = X(t, [900, 6100]); return { x, y }; },
+    // AI가 와드를 두는 곳: 강 네 곳 + 정글 입구 (점대칭)
+    wardSpots: [[1800, 1800], [2700, 2700], [4300, 4300], [5200, 5200], [2300, 4700], [4700, 2300], [3500, 4300], [3500, 2700]]
   };
 }

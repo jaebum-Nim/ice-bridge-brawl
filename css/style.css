@@ -90,6 +90,7 @@ body.mobile, body.mobile canvas { touch-action: none; -webkit-user-select: none;
 #touch .mini { width: calc(52 * var(--u)); height: calc(52 * var(--u)); font-size: calc(11 * var(--u)) !important; }
 #tRecall { left: calc(206 * var(--u)); bottom: calc(22 * var(--u)); }
 #tShop { left: calc(206 * var(--u)); bottom: calc(82 * var(--u)); }
+#tWard { left: calc(206 * var(--u)); bottom: calc(142 * var(--u)); }
 #tGold { color: #fde68a; font-size: calc(10 * var(--u)); }
 #touch .tiny { border-radius: 8px; width: calc(40 * var(--u)); height: calc(30 * var(--u)); top: 6px; font-size: calc(12 * var(--u)) !important; }
 #tPause { left: 8px; } #tTab { left: calc(8px + 46 * var(--u)); } #tFull { left: calc(8px + 92 * var(--u)); }

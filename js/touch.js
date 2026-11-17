@@ -19,6 +19,7 @@ export function initTouch(ctx) {
     ${KEYS.map((k, i) => `<button id="tS${i}" class="tb sk" data-i="${i}"><b></b><i class="cd"></i><span class="pip"></span><em>${k}</em></button><button id="tL${i}" class="tb lv" data-i="${i}">+</button>`).join('')}
     <button id="tD" class="tb sp" data-k="D"></button><button id="tF" class="tb sp" data-k="F"></button>
     <button id="tRecall" class="tb mini">귀환</button>
+    <button id="tWard" class="tb mini">와드</button>
     <button id="tShop" class="tb mini">상점<br><span id="tGold"></span></button>
     <button id="tPause" class="tb tiny">Ⅱ</button>
     <button id="tTab" class="tb tiny">점수</button>
@@ -103,6 +104,8 @@ export function initTouch(ctx) {
   for (const k of ['D', 'F']) { const el = $('t' + k); el.addEventListener('pointerdown', e => { startAim(e, 'sp', 0, el); if (st.aim) st.aim.k = k; }); el.addEventListener('pointermove', moveAim); el.addEventListener('pointerup', endAim); el.addEventListener('pointercancel', e => { if (st.aim) st.aim.cancel = true; endAim(e); }); }
   for (let i = 0; i < 4; i++) $('tL' + i).addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); if (getG()) cmd(P(), { c: 'lvl', i }); });
   $('tRecall').addEventListener('pointerdown', e => { e.preventDefault(); if (live()) cmd(P(), { c: 'recall' }); });
+  // 와드: 이동 방향(없으면 바라보는 방향)으로 사거리 끝에 설치
+  $('tWard').addEventListener('pointerdown', e => { e.preventDefault(); if (!live()) return; const p = P(), d = joyDir(), a = d ? Math.atan2(d[1], d[0]) : p.face || 0; cmd(p, { c: 'ward', x: p.x + Math.cos(a) * 600, y: p.y + Math.sin(a) * 600 }); });
   $('tShop').addEventListener('pointerdown', e => { e.preventDefault(); toggleShop(); });
   $('tPause').addEventListener('pointerdown', e => { e.preventDefault(); onPause(); });
   $('tTab').addEventListener('pointerdown', e => { e.preventDefault(); S.tab = !S.tab; });
@@ -147,7 +150,7 @@ export function initTouch(ctx) {
     }
     for (const k of ['D', 'F']) { const el = $('t' + k), sp = spellOf(p, k), cd = p.spellCd[k]; el.textContent = cd > 0 ? Math.ceil(cd) : sp.n; el.classList.toggle('off', cd > 0); el.classList.toggle('ready', p.spells[k] === 'smite' && cd <= 0 && G.units.some(u => u.kind === 'monster' && u.big && !u.dead && u.hp <= smiteDmg(p) && Math.hypot(u.x - p.x, u.y - p.y) < 560)); }
     $('tGold').textContent = Math.floor(p.gold) + 'G'; $('tShop').classList.toggle('off', !canShop(p));
-    $('tRecall').style.display = G.mode === 'rift' ? '' : 'none';
+    $('tRecall').style.display = $('tWard').style.display = G.mode === 'rift' ? '' : 'none'; $('tWard').textContent = p.wardCd > 0 ? Math.ceil(p.wardCd) : '와드'; $('tWard').classList.toggle('off', p.wardCd > 0);
     root.classList.toggle('aiming', !!st.aim && st.aim.kind === 'ab' && S.aiming >= 0 || (!!st.aim && st.aim.moved));
   }
   return {

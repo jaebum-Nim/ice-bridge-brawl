@@ -1,5 +1,5 @@
 // 2D 오버레이: 체력바, 피해 숫자, 하단 패널, 미니맵, 알림
-import { MAP_W, LANE_Y1, LANE_Y2, TEAMC, TEAMN, ITEMS, itemStats, need, effMs, canShop, clamp, canLevel, cdOf, costOf, spellOf, smiteDmg, POS, RECALL_T, ROLE, AD, defOf, asOf, canHitStructure } from './sim.js';
+import { MAP_W, LANE_Y1, LANE_Y2, TEAMC, TEAMN, ITEMS, itemStats, need, effMs, canShop, clamp, canLevel, cdOf, costOf, spellOf, smiteDmg, POS, RECALL_T, ROLE, AD, defOf, asOf, canHitStructure, seen } from './sim.js';
 
 const FONT = 'system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif';
 export class Hud {
@@ -22,7 +22,7 @@ export class Hud {
     c.setTransform(this.DPR, 0, 0, this.DPR, 0, 0); c.clearRect(0, 0, W, H); this.rects = [];
     // 유닛 위 체력바
     for (const u of G.units) {
-      if (u.dead || u.untarg > 0) continue;
+      if (u.dead || u.untarg > 0 || !seen(p.team, u)) continue;
       const hgt = u.kind === 'hero' ? 2.35 : u.kind === 'minion' ? (u.mk === 's' ? 1.0 : .95) : u.kind === 'monster' ? (u.big ? 2.2 : 1.2) : u.kind === 'tower' ? 4.5 : 3.6;
       const s = R.project(u.x, u.y, hgt); if (!s.vis || s.x < -100 || s.x > W + 100 || s.y < -50 || s.y > H + 50) continue;
       const ally = u.team === p.team;
@@ -60,8 +60,9 @@ export class Hud {
       this.mmRect = { x: mx, y: my, w: mw, h: mh, W: M.W, H: M.H };
       const wx = x => mx + x / M.W * mw, wy = y => my + y / M.H * mh;
       for (const k of G.camps) if (k.up) { c.fillStyle = k.type === 'blue' ? '#60a5fa' : k.type === 'red' ? '#f87171' : '#e7b75f'; c.beginPath(); c.arc(wx(k.x), wy(k.y), 3, 0, 7); c.fill(); }
-      for (const u of G.units) { if (u.dead || u.kind === 'monster') continue; c.fillStyle = TEAMC[u.team]; if (u.kind === 'minion') c.fillRect(wx(u.x) - 1, wy(u.y) - 1, 2, 2); else if (u.kind !== 'hero') { c.fillRect(wx(u.x) - 3.5, wy(u.y) - 3.5, 7, 7); c.strokeStyle = '#0b1220'; c.lineWidth = 1; c.strokeRect(wx(u.x) - 3.5, wy(u.y) - 3.5, 7, 7); } }
-      for (const u of G.heroes) { if (u.dead) continue; c.beginPath(); c.arc(wx(u.x), wy(u.y), u === p ? 5 : 4, 0, 7); c.fillStyle = TEAMC[u.team]; c.fill(); c.strokeStyle = u === p ? '#ffd166' : '#0b1220'; c.lineWidth = u === p ? 2 : 1; c.stroke(); }
+      for (const w of G.wards || []) if (w.team === p.team) { c.fillStyle = '#fde68a'; c.beginPath(); c.arc(wx(w.x), wy(w.y), 2.5, 0, 7); c.fill(); }
+      for (const u of G.units) { if (u.dead || u.kind === 'monster' || !seen(p.team, u)) continue; c.fillStyle = TEAMC[u.team]; if (u.kind === 'minion') c.fillRect(wx(u.x) - 1, wy(u.y) - 1, 2, 2); else if (u.kind !== 'hero') { c.fillRect(wx(u.x) - 3.5, wy(u.y) - 3.5, 7, 7); c.strokeStyle = '#0b1220'; c.lineWidth = 1; c.strokeRect(wx(u.x) - 3.5, wy(u.y) - 3.5, 7, 7); } }
+      for (const u of G.heroes) { if (u.dead || !seen(p.team, u)) continue; c.beginPath(); c.arc(wx(u.x), wy(u.y), u === p ? 5 : 4, 0, 7); c.fillStyle = TEAMC[u.team]; c.fill(); c.strokeStyle = u === p ? '#ffd166' : '#0b1220'; c.lineWidth = u === p ? 2 : 1; c.stroke(); }
       const q = [R.pick(0, 0), R.pick(W, 0), R.pick(W, H), R.pick(0, H)]; c.strokeStyle = 'rgba(255,255,255,.7)'; c.lineWidth = 1; c.beginPath(); q.forEach((pt, i) => { const X = clamp(wx(pt.x), mx, mx + mw), Y = clamp(wy(pt.y), my, my + mh); if (i) c.lineTo(X, Y); else c.moveTo(X, Y); }); c.closePath(); c.stroke();
     } else {
       mw = Math.min(300, W * .3); mh = 54; mx = W - mw - 12; my = 10; this.mmRect = null;
@@ -85,7 +86,7 @@ export class Hud {
   }
   // 좌클릭으로 고른 유닛의 상태 창 (왼쪽 위)
   selInfo(G, R, S) {
-    const u = S.sel; if (!u || (u.dead && u.kind !== 'hero') || !G.units.includes(u)) { S.sel = null; return; }
+    const u = S.sel; if (!u || (u.dead && u.kind !== 'hero') || !G.units.includes(u) || !seen(G.player.team, u)) { S.sel = null; return; }
     const c = this.ctx, p = G.player, x = 12, y = 40, w = 250;
     const col = u.team === 2 ? '#e7b75f' : u.team === p.team ? '#60a5fa' : '#f87171';
     // 선택 표시: 유닛 발밑 흰 원
@@ -155,7 +156,7 @@ export class Hud {
     const ix = ax + hbW + 16;
     for (let i = 0; i < 6; i++) { const s = 36, x = ix + (i % 3) * (s + 5), y = py + 12 + Math.floor(i / 3) * (s + 5); this.rr(x, y, s, s, 6); c.fillStyle = '#111d33'; c.fill(); c.strokeStyle = '#24395c'; c.lineWidth = 1.5; c.stroke(); const id = p.items[i]; if (id) { this.txt(ITEMS[id].n.slice(0, 2), x + s / 2, y + s / 2 + 5, 12, '#ffd166', 'center', 800); this.rects.push({ x, y, w: s, h: s, title: ITEMS[id].n, sub: '', body: itemStats(ITEMS[id]) }); } }
     this.txt(`💰 ${Math.floor(p.gold)}`, ix, py + 108, 14, '#facc15', 'left', 800);
-    if (canShop(p)) this.txt('P: 상점', ix + 70, py + 108, 12, '#86efac', 'left', 700); else if (G.mode === 'rift') this.txt('B: 귀환', ix + 70, py + 108, 12, '#93c5fd', 'left', 700);
+    if (canShop(p)) this.txt('P: 상점', ix + 70, py + 108, 12, '#86efac', 'left', 700); else if (G.mode === 'rift') this.txt(`B 귀환 · 4 와드${p.wardCd > 0 ? ' ' + Math.ceil(p.wardCd) : ''}`, ix + 70, py + 108, 12, '#93c5fd', 'left', 700);
     const sx = ix + 130; if (sx + 80 < px + pw) { const st = [['공격력', Math.round(p.ad)], ['주문력', Math.round(p.ap)], ['방어력', Math.round(p.def)], ['공격 속도', p.as.toFixed(2)], ['이동 속도', Math.round(effMs(p))], ['스킬 가속', p.ah]]; st.forEach((s, i) => { this.txt(s[0], sx, py + 24 + i * 16, 11.5, '#9fb3d1', 'left', 600); this.txt(s[1], px + pw - 14, py + 24 + i * 16, 11.5, '#e6eefc', 'right', 800); }); }
     if (S.amove) this.txt('공격 이동: 좌클릭으로 지점 선택', W / 2, py - 12, 13, '#fca5a5', 'center', 700, 3);
     if (p.pts > 0 && [0, 1, 2, 3].some(i => canLevel(p, i)) && !S.hint) this.txt(`스킬 포인트 ${p.pts}개 — + 버튼 또는 Shift+Q/W/E/R`, W / 2, py - (S.amove ? 32 : 30), 13, '#fde68a', 'center', 800, 3);

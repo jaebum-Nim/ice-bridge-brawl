@@ -2,14 +2,17 @@
 import * as Sim from './sim.js';
 import { Renderer } from './render3d.js';
 import { Hud } from './hud.js';
+import { initTouch } from './touch.js';
 const { HEROES, HMAP, ROLE, DIFF, ITEMS, TEAMC, TEAMN, SELF_T, POS, itemStats, cmd, canShop, targetable } = Sim;
 
 const glCv = document.getElementById('gl'), hudCv = document.getElementById('hud');
-let R = null, hud = null, G = null;
+let R = null, hud = null, G = null, touch = null;
 const S = { aiming: -1, amove: false, tab: false, paused: false, shopOpen: false, camOff: 0, camAt: null, texts: [], feed: [], banner: null, mx: 0, my: 0, mouse: { x: 0, y: 0 }, rightDown: false, canHit: u => Sim.canHitStructure(u) };
 const $ = id => document.getElementById(id);
-let quality = 'high', castMode = 'normal'; // normal: 롤 기본(키→클릭), quick: 키 누르는 즉시, release: 떼는 순간
-try { quality = localStorage.getItem('ibb-quality') || 'high'; castMode = localStorage.getItem('ibb-cast') || 'normal'; } catch (e) { }
+// 조작: pc(마우스·키보드) / pad(모바일 터치 패드). 터치 화면이면 처음엔 패드
+const COARSE = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
+let quality = COARSE ? 'mid' : 'high', castMode = 'normal', ctrl = COARSE ? 'pad' : 'pc'; // normal: 롤 기본(키→클릭), quick: 키 누르는 즉시, release: 떼는 순간
+try { quality = localStorage.getItem('ibb-quality') || quality; castMode = localStorage.getItem('ibb-cast') || 'normal'; ctrl = localStorage.getItem('ibb-ctrl') || ctrl; } catch (e) { }
 const AIM_H = .75; // 스킬 조준은 몸통 높이 기준 (투사체가 날아가는 높이)
 
 function initGfx() {
@@ -17,6 +20,7 @@ function initGfx() {
   try { R = new Renderer(glCv); hud = new Hud(hudCv); R.setQuality(quality); }
   catch (e) { console.error(e); $('menuErr').textContent = '이 브라우저에서 3D(WebGL)를 시작하지 못했습니다. 최신 Chrome/Edge/Firefox에서 열어주세요.'; return false; }
   window.addEventListener('resize', () => { R.resize(); hud.resize(); });
+  touch = initTouch({ S, R, hud, hudCv, getG: () => G, unitUnder: f => unitUnderMouse(f), toggleShop: () => { if (S.shopOpen) closeShop(); else if (G && !G.over) openShop(); }, onPause: () => { if (G && !G.over && !S.shopOpen) S.paused = !S.paused; } });
   return true;
 }
 
@@ -67,7 +71,8 @@ function frame(now) {
     for (const m of S.feed) m.t -= dt; S.feed = S.feed.filter(m => m.t > 0);
     if (S.banner) { S.banner.t -= dt; if (S.banner.t <= 0) S.banner = null; }
     if (S.hint) { S.hint.t -= dt; if (S.hint.t <= 0) S.hint = null; }
-    S.mouse = R.pick(S.mx, S.my); S.aimPt = R.pickAt(S.mx, S.my, AIM_H); S.dt = dt;
+    if (!S.mobile) { S.mouse = R.pick(S.mx, S.my); S.aimPt = R.pickAt(S.mx, S.my, AIM_H); } else touch.tick(dt);
+    S.dt = dt;
     // 우클릭을 누르고 있으면 마우스가 멈춰 있어도 계속 커서 쪽으로 이동 명령 (롤과 같게)
     if (S.rightDown && playing() && now - (S.dragT || 0) > 100) { S.dragT = now; rightClick(true); }
     R.render(G, S.paused ? 0 : dt, { aiming: S.aiming, mouse: S.aimPt, camOff: S.camOff, camAt: S.camAt });
@@ -196,17 +201,20 @@ function buildMenu() {
   ${M.mode === '1v1' ? `<h3>상대 영웅</h3><div class="grid small">${heroCards(M.enemy, 'e')}</div>` : ''}
   <div class="row"><span class="lbl">AI 난이도</span><div class="seg">${DIFF.map((d, i) => `<button data-d="${i}" class="${M.diff === i ? 'on' : ''}">${d.name}</button>`).join('')}</div>
   <span class="lbl">그래픽</span><div class="seg">${[['high', '높음'], ['mid', '중간'], ['low', '낮음']].map(([k, n]) => `<button data-q="${k}" class="${quality === k ? 'on' : ''}">${n}</button>`).join('')}</div>
-  </div><div class="row" style="margin-top:12px"><span class="lbl">스킬 시전</span><div class="seg">${[['normal', '일반 (키 → 클릭)'], ['quick', '빠른 시전 (키 즉시)'], ['release', '키 떼면 시전']].map(([k, n]) => `<button data-c="${k}" class="${castMode === k ? 'on' : ''}">${n}</button>`).join('')}</div>
+  </div><div class="row" style="margin-top:12px"><span class="lbl">조작</span><div class="seg">${[['pc', '🖱 PC (마우스·키보드)'], ['pad', '📱 모바일 (터치 패드)']].map(([k, n]) => `<button data-ct="${k}" class="${ctrl === k ? 'on' : ''}">${n}</button>`).join('')}</div></div>
+  <div class="row" style="margin-top:12px"><span class="lbl" style="${ctrl === 'pad' ? 'display:none' : ''}">스킬 시전</span><div class="seg" style="${ctrl === 'pad' ? 'display:none' : ''}">${[['normal', '일반 (키 → 클릭)'], ['quick', '빠른 시전 (키 즉시)'], ['release', '키 떼면 시전']].map(([k, n]) => `<button data-c="${k}" class="${castMode === k ? 'on' : ''}">${n}</button>`).join('')}</div>
   <span class="lbl">스킬 찍기</span><div class="seg"><button data-s="0" class="${!M.autoSkill ? 'on' : ''}">직접 (+ 버튼 / Shift+키)</button><button data-s="1" class="${M.autoSkill ? 'on' : ''}">자동</button></div>
   <div style="flex:1"></div><button class="btn" id="go">게임 시작</button></div>
   <div id="menuErr" class="err"></div>
-  <div class="help"><b>조작법</b><br><kbd>우클릭</kbd> 이동·공격 (누르고 있으면 계속 이동), <kbd>좌클릭</kbd> 유닛 상태 보기 &nbsp; <kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd><kbd>R</kbd> 스킬 (시전 방식은 위에서 선택, 조준 중 <kbd>우클릭</kbd>/<kbd>Esc</kbd> 취소) &nbsp; <kbd>D</kbd> 점멸 &nbsp; <kbd>F</kbd> 눈덩이 (맞춘 뒤 다시 <kbd>F</kbd>로 돌진)<br><kbd>A</kbd>+좌클릭 공격 이동 &nbsp; <kbd>S</kbd> 정지 &nbsp; <kbd>P</kbd> 상점 (기지 또는 사망 시) &nbsp; <kbd>Tab</kbd> 점수판 &nbsp; <kbd>←</kbd><kbd>→</kbd> 카메라, <kbd>Space</kbd> 복귀 &nbsp; <kbd>Esc</kbd> 일시정지 &nbsp; <kbd>Shift</kbd>+<kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd><kbd>R</kbd> 스킬 레벨업<br>${M.mode === 'rift' ? `<b>협곡 규칙</b>: 3개 라인(탑·미드·봇)과 정글. 라인마다 포탑 1개 + 넥서스 앞 포탑 1개. 라인 포탑 중 하나라도 부수면 넥서스 포탑, 그걸 부수면 넥서스를 칠 수 있습니다. <kbd>B</kbd> 귀환(6초) · 분수대에서 빠르게 회복 · 상점은 기지에서만. 정글러는 <kbd>F</kbd> 강타, 나머지는 <kbd>F</kbd> 회복. 푸른 정령(스킬 가속)·붉은 골렘(평타 둔화) 버프. 미니맵 좌클릭 카메라 이동, 우클릭 이동, 방향키 카메라, <kbd>Space</kbd> 내 영웅으로. 10분부터 구조물이 점점 약해져 15분 안팎에 끝납니다.` : `<b>칼바람 규칙</b>: 분수대에서 회복되지 않고 체력은 아주 천천히만 찹니다. 다리 위 초록 구슬은 근처 아군 모두의 체력과 마나를 채웁니다. 상점은 기지를 떠나거나 공격받으면 다음에 죽을 때까지 닫힙니다. 적 분수대에 들어가면 순식간에 녹습니다. 화면이 버벅이면 그래픽을 '낮음'으로 바꿔보세요.`}</div></div>`;
+  ${ctrl === 'pad' ? `<div class="help"><b>모바일 조작 (가로 화면)</b><br>왼쪽 조이스틱 이동 · 오른쪽 <b>공격</b> 버튼(누르고 있으면 계속, 영웅 우선) · <b>막타</b> 버튼(체력 낮은 미니언·몬스터) · 스킬 버튼을 <b>톡</b> 누르면 가까운 적에게 자동 조준, <b>끌면</b> 직접 조준 후 떼서 시전, 위쪽 <b>✕ 칸</b>으로 끌어 놓으면 취소 · 스킬 위 <b>+</b> 로 레벨업 · 점멸은 조이스틱 방향(또는 끈 방향) · 미니맵을 누르고 있으면 그쪽을 봄 · 유닛을 톡 누르면 상태 보기 · ⛶ 전체 화면</div>` : ''}
+  <div class="help"${ctrl === 'pad' ? ' style="display:none"' : ''}><b>조작법</b><br><kbd>우클릭</kbd> 이동·공격 (누르고 있으면 계속 이동), <kbd>좌클릭</kbd> 유닛 상태 보기 &nbsp; <kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd><kbd>R</kbd> 스킬 (시전 방식은 위에서 선택, 조준 중 <kbd>우클릭</kbd>/<kbd>Esc</kbd> 취소) &nbsp; <kbd>D</kbd> 점멸 &nbsp; <kbd>F</kbd> 눈덩이 (맞춘 뒤 다시 <kbd>F</kbd>로 돌진)<br><kbd>A</kbd>+좌클릭 공격 이동 &nbsp; <kbd>S</kbd> 정지 &nbsp; <kbd>P</kbd> 상점 (기지 또는 사망 시) &nbsp; <kbd>Tab</kbd> 점수판 &nbsp; <kbd>←</kbd><kbd>→</kbd> 카메라, <kbd>Space</kbd> 복귀 &nbsp; <kbd>Esc</kbd> 일시정지 &nbsp; <kbd>Shift</kbd>+<kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd><kbd>R</kbd> 스킬 레벨업<br>${M.mode === 'rift' ? `<b>협곡 규칙</b>: 3개 라인(탑·미드·봇)과 정글. 라인마다 포탑 1개 + 넥서스 앞 포탑 1개. 라인 포탑 중 하나라도 부수면 넥서스 포탑, 그걸 부수면 넥서스를 칠 수 있습니다. <kbd>B</kbd> 귀환(6초) · 분수대에서 빠르게 회복 · 상점은 기지에서만. 정글러는 <kbd>F</kbd> 강타, 나머지는 <kbd>F</kbd> 회복. 푸른 정령(스킬 가속)·붉은 골렘(평타 둔화) 버프. 미니맵 좌클릭 카메라 이동, 우클릭 이동, 방향키 카메라, <kbd>Space</kbd> 내 영웅으로. 10분부터 구조물이 점점 약해져 15분 안팎에 끝납니다.` : `<b>칼바람 규칙</b>: 분수대에서 회복되지 않고 체력은 아주 천천히만 찹니다. 다리 위 초록 구슬은 근처 아군 모두의 체력과 마나를 채웁니다. 상점은 기지를 떠나거나 공격받으면 다음에 죽을 때까지 닫힙니다. 적 분수대에 들어가면 순식간에 녹습니다. 화면이 버벅이면 그래픽을 '낮음'으로 바꿔보세요.`}</div></div>`;
   m.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { M.mode = b.dataset.mode; buildMenu(); });
   m.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { M.pos = b.dataset.p; buildMenu(); });
   m.querySelectorAll('[data-h]').forEach(c => c.onclick = () => { M.hero = c.dataset.h; buildMenu(); });
   m.querySelectorAll('[data-e]').forEach(c => c.onclick = () => { M.enemy = c.dataset.e; buildMenu(); });
   m.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { M.diff = +b.dataset.d; buildMenu(); });
   m.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { M.autoSkill = b.dataset.s === '1'; try { localStorage.setItem('ibb-autoskill', M.autoSkill ? '1' : '0'); } catch (e) { } buildMenu(); });
+  m.querySelectorAll('[data-ct]').forEach(b => b.onclick = () => { ctrl = b.dataset.ct; try { localStorage.setItem('ibb-ctrl', ctrl); } catch (e) { } buildMenu(); });
   m.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { castMode = b.dataset.c; try { localStorage.setItem('ibb-cast', castMode); } catch (e) { } buildMenu(); });
   m.querySelectorAll('[data-q]').forEach(b => b.onclick = () => { quality = b.dataset.q; try { localStorage.setItem('ibb-quality', quality); } catch (e) { } if (R) R.setQuality(quality); buildMenu(); });
   $('go').onclick = startGame;
@@ -214,6 +222,7 @@ function buildMenu() {
 function startGame() {
   if (!initGfx()) return;
   $('menu').classList.add('hidden'); $('end').classList.add('hidden');
+  S.mobile = ctrl === 'pad'; touch.show(S.mobile); touch.reset();
   Object.assign(S, { sel: null, aiming: -1, amove: false, paused: false, shopOpen: false, camOff: 0, camAt: null, texts: [], feed: [], banner: null });
   R.reset();
   G = Sim.newGame({ mode: M.mode, pick: M.hero, enemy: M.enemy, diff: M.diff, autoSkill: M.autoSkill, pos: M.pos });
@@ -227,7 +236,7 @@ function endGame(winner) {
     let h = `<h1 style="color:${win ? '#93c5fd' : '#fca5a5'}">${win ? '승리!' : '패배'}</h1><p class="sub">게임 시간 ${mm}분 ${ss}초 · ${TEAMN[0]} ${G.kills[0]} : ${G.kills[1]} ${TEAMN[1]} · 난이도 ${DIFF[G.diff].name}</p><table><tr><th>팀</th><th>영웅</th><th>레벨</th><th>K / D / A</th>${G.mode === 'rift' ? '<th>CS</th>' : ''}<th>아이템</th></tr>`;
     for (const hh of G.heroes) h += `<tr style="${hh.isPlayer ? 'color:#ffd166;font-weight:700' : ''}"><td style="color:${TEAMC[hh.team]}">${TEAMN[hh.team]}</td><td>${hh.pos ? '[' + POS[hh.pos] + '] ' : ''}${hname(hh)}</td><td>${hh.level}</td><td>${hh.k} / ${hh.d} / ${hh.a}</td>${G.mode === 'rift' ? `<td>${hh.cs}</td>` : ''}<td style="font-size:12px;color:#9fb3d1">${hh.items.map(i => ITEMS[i].n).join(', ')}</td></tr>`;
     h += `</table><div class="row"><button class="btn" id="again">다시 하기</button><button class="btn sec" id="toMenu">메뉴로</button></div>`; $('endIn').innerHTML = h; $('end').classList.remove('hidden');
-    $('again').onclick = startGame; $('toMenu').onclick = () => { $('end').classList.add('hidden'); $('menu').classList.remove('hidden'); buildMenu(); };
+    $('again').onclick = startGame; $('toMenu').onclick = () => { touch.show(false); $('end').classList.add('hidden'); $('menu').classList.remove('hidden'); buildMenu(); };
   }, 2600);
 }
 buildMenu();

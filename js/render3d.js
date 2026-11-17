@@ -80,10 +80,10 @@ export class Renderer {
   }
   // 맵이 바뀔 때 지형을 새로 만듦 (칼바람: 다리 / 협곡: 3라인 + 정글)
   setMap(M) {
-    if (this.mapId === M.id) return; this.mapId = M.id;
+    const key = M.id + (M.grid ? ':' + (this.quality === 'high' ? 'hi' : 'lo') : ''); if (this.mapId === key) return; this.mapId = key;
     if (this.worldG) { this.scene.remove(this.worldG); this.worldG.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
     const grp = new THREE.Group(); this.worldG = grp;
-    this.world = M.grid ? buildRiftTerrain(grp, M, K, this.r.capabilities.getMaxAnisotropy()) : buildBlockWorld(grp, M.W * K, TEAMC);
+    this.world = M.grid ? buildRiftTerrain(grp, M, K, this.r.capabilities.getMaxAnisotropy(), this.quality === 'high' && this.r.capabilities.maxTextureSize >= 4096 ? 4096 : 2048) : buildBlockWorld(grp, M.W * K, TEAMC);
     // 분수: 신호기처럼 위로 뻗는 빛 기둥 (단순 반투명 기둥)
     for (const t of [0, 1]) {
       const f = M.fountain[t], tc = new THREE.Color(TEAMC[t]);

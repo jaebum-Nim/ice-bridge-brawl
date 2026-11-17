@@ -40,7 +40,7 @@ export class Hud {
     }
     // 떠오르는 숫자
     for (const t of S.texts) { const s = R.project(t.x, t.y, 2.3 + t.rise); if (!s.vis) continue; c.globalAlpha = Math.min(1, t.t * 2.5); this.txt(t.s, s.x, s.y, t.big ? 22 : 17, t.c, 'center', 900, 4); } c.globalAlpha = 1;
-    if (p.dead) { c.fillStyle = 'rgba(20,24,34,.45)'; c.fillRect(0, 0, W, H); this.txt(`부활까지 ${Math.ceil(p.respawnT)}초`, W / 2, H * .38, 34, '#e6eefc', 'center', 800, 4); this.txt('P 키로 상점을 열 수 있습니다', W / 2, H * .38 + 32, 15, '#cbd5e1', 'center', 600, 3); }
+    if (p.dead) { c.fillStyle = 'rgba(20,24,34,.45)'; c.fillRect(0, 0, W, H); this.txt(`부활까지 ${Math.ceil(p.respawnT)}초`, W / 2, H * .38, 34, '#e6eefc', 'center', 800, 4); this.txt(S.mobile ? '상점 버튼으로 아이템을 살 수 있습니다' : 'P 키로 상점을 열 수 있습니다', W / 2, H * .38 + 32, 15, '#cbd5e1', 'center', 600, 3); }
     // 눈 (화면 공간)
     if (!this.snow) { this.snow = []; for (let i = 0; i < 140; i++) this.snow.push({ x: Math.random(), y: Math.random(), s: .6 + Math.random() * 2, v: .02 + Math.random() * .05 }); }
     c.fillStyle = 'rgba(235,243,255,.6)';
@@ -73,11 +73,12 @@ export class Hud {
     }
     // 킬 피드
     let fy = my + mh + 22;
-    for (const m of S.feed) { c.globalAlpha = Math.min(1, m.t); c.font = `700 13px ${FONT}`; const sep = '  ⚔  ', vw = c.measureText(m.v).width, sw = c.measureText(sep).width, kw = c.measureText(m.k).width; this.rr(W - 12 - vw - sw - kw - 16, fy - 15, vw + sw + kw + 16, 22, 6); c.fillStyle = 'rgba(8,14,28,.8)'; c.fill(); c.textAlign = 'right'; c.fillStyle = m.vc; c.fillText(m.v, W - 20, fy); c.fillStyle = '#c6d4ea'; c.fillText(sep, W - 20 - vw, fy); c.fillStyle = m.kc; c.fillText(m.k, W - 20 - vw - sw, fy); fy += 26; }
+    // 모바일은 스킬 버튼을 가리지 않게 2줄만
+    for (const m of (S.mobile ? S.feed.slice(-2) : S.feed)) { c.globalAlpha = Math.min(1, m.t); c.font = `700 13px ${FONT}`; const sep = '  ⚔  ', vw = c.measureText(m.v).width, sw = c.measureText(sep).width, kw = c.measureText(m.k).width; this.rr(W - 12 - vw - sw - kw - 16, fy - 15, vw + sw + kw + 16, 22, 6); c.fillStyle = 'rgba(8,14,28,.8)'; c.fill(); c.textAlign = 'right'; c.fillStyle = m.vc; c.fillText(m.v, W - 20, fy); c.fillStyle = '#c6d4ea'; c.fillText(sep, W - 20 - vw, fy); c.fillStyle = m.kc; c.fillText(m.k, W - 20 - vw - sw, fy); fy += 26; }
     c.globalAlpha = 1;
     if (S.banner) { const b = S.banner; c.globalAlpha = Math.min(1, b.t * 2, (b.max - b.t) * 4 + .2); c.font = `900 30px ${FONT}`; const bw = c.measureText(b.s).width + 50; this.rr(W / 2 - bw / 2, H * .16 - 36, bw, 52, 12); c.fillStyle = 'rgba(8,14,28,.8)'; c.fill(); this.txt(b.s, W / 2, H * .16, 30, b.c, 'center', 900); c.globalAlpha = 1; }
-    if (S.fps) this.txt(`${S.fps} FPS`, 12, 22, 12, S.fps < 30 ? '#fca5a5' : 'rgba(200,214,234,.6)', 'left', 700);
-    this.panel(G, S);
+    if (S.fps) this.txt(`${S.fps} FPS`, S.mobile ? 150 : 12, 22, 12, S.fps < 30 ? '#fca5a5' : 'rgba(200,214,234,.6)', 'left', 700);
+    if (!S.mobile) this.panel(G, S); else this.mobileInfo(G, S);
     if (S.sel) this.selInfo(G, R, S);
     if (S.tab) this.score(G);
     if (S.paused && !S.shopOpen) { c.fillStyle = 'rgba(4,8,16,.6)'; c.fillRect(0, 0, W, H); this.txt('일시정지', W / 2, H / 2 - 10, 40, '#e6eefc', 'center', 900); this.txt('Esc 키로 계속하기', W / 2, H / 2 + 24, 15, '#a9bbd6', 'center'); }
@@ -104,6 +105,14 @@ export class Hud {
     yy += Math.ceil(rows.length / 2) * 18 + 4;
     if (u.kind === 'hero' && u.items.length) { this.txt(u.items.map(i => ITEMS[i].n).join(', '), x + 12, yy + 14, 10, '#c7d2fe', 'left', 600); yy += 22; }
     if (u.buffs.length) { const B = { blueb: '푸른 정령', redb: '붉은 골렘', ms: '이동 속도', ad: '공격력', as: '공격 속도', def: '방어력', dr: '피해 감소', emp: '강화 공격', spin: '회전', dodge: '회피' }; this.txt('효과: ' + [...new Set(u.buffs.map(b => B[b.type] || b.type))].join(', '), x + 12, yy + 12, 10, '#fde68a', 'left', 600); }
+  }
+  // 모바일: 아래 큰 창 대신 위쪽에 짧은 정보 한 줄
+  mobileInfo(G, S) {
+    const p = G.player, W = this.W; if (S.aiming >= 0) return; // 조준 중엔 취소 칸이 그 자리에 뜸
+    const xpN = p.level >= 18 ? 1 : p.xp / (180 + 60 * p.level);
+    const s = `Lv ${p.level}${p.level < 18 ? ` (${Math.floor(xpN * 100)}%)` : ''} · ${p.k}/${p.d}/${p.a}${p.pos ? ' · CS ' + p.cs : ''}${p.pts > 0 ? ' · 스킬 포인트 ' + p.pts : ''}${p.recall ? ' · 귀환 중' : ''}${p.dead ? ` · 부활 ${Math.ceil(p.respawnT)}초` : ''}`;
+    this.txt(s, W / 2, 74, 13, p.pts > 0 ? '#fde68a' : '#e6eefc', 'center', 800, 3);
+    if (p.fail && S.failT > 0) this.txt(p.fail, W / 2, 94, 12, '#fca5a5', 'center', 700, 3);
   }
   panel(G, S) {
     const c = this.ctx, W = this.W, H = this.H, p = G.player;

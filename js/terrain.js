@@ -48,7 +48,7 @@ function paintGround(M, size) {
   return cv;
 }
 
-export function buildRiftTerrain(group, M, K, maxAniso = 4) {
+export function buildRiftTerrain(group, M, K, maxAniso = 4, texSize = 4096) {
   const N = M.N, W = M.W * K, C = M.W / N; // C: 격자 한 칸의 게임 단위 크기
   const wall = (x, z) => x < 0 || z < 0 || x >= N || z >= N ? 1 : (M.grid[z * N + x] === 0 ? 1 : 0);
   // 점에서 가장 가까운 '반대 종류' 칸까지의 거리 (벽 안이면 길까지, 길 위면 벽까지)
@@ -66,7 +66,7 @@ export function buildRiftTerrain(group, M, K, maxAniso = 4) {
     let ao = 1; if (y < .01) { const d = -M.sdf(pos.getX(i) / K, pos.getZ(i) / K); ao = .72 + .28 * Math.min(1, Math.max(0, d) / 70); } // 벽 밑 그늘
     col[i * 3] = (1 + steep * .55 - top * .05) * ao; col[i * 3 + 1] = (1 + steep * .2 + top * .08) * ao; col[i * 3 + 2] = (1 + steep * .25 - top * .1) * ao; }
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  const tex = new THREE.CanvasTexture(paintGround(M, 4096)); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = maxAniso;
+  const tex = new THREE.CanvasTexture(paintGround(M, texSize)); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = maxAniso;
   const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ map: tex, vertexColors: true })); group.add(mesh);
   // 벽 위 나무 (낮은 다각형 원뿔, 한 번에 그림)
   const trees = []; let sd = 5; const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647;

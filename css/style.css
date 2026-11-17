@@ -55,3 +55,54 @@ td,th{padding:7px 8px;text-align:left;border-bottom:1px solid #1c2c48}
 th{color:#9fb3d1;font-weight:600;font-size:12px}
 #boot{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:#a9bbd6;font-size:15px;z-index:20;background:#050a14;text-align:center;padding:20px;line-height:1.7}
 #boot code{background:#111d33;padding:2px 8px;border-radius:6px;color:#ffd166}
+
+/* ---------- 모바일 패드 조작 ---------- */
+body.mobile, body.mobile canvas { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; overscroll-behavior: none; }
+#touch { position: fixed; inset: 0; z-index: 5; pointer-events: none; --u: min(1px, .26vh); }
+#touch.hidden { display: none; }
+#touch .tb { position: fixed; pointer-events: auto; border-radius: 50%; border: 2px solid rgba(255,255,255,.35); background: rgba(12,20,36,.62); color: #e6eefc; font: 800 calc(13 * var(--u)) system-ui, sans-serif; display: flex; align-items: center; justify-content: center; flex-direction: column; overflow: hidden; touch-action: none; padding: 0; line-height: 1.1; }
+#touch .tb.on { background: rgba(70,110,170,.75); transform: scale(.95); }
+#touch .tb.off { opacity: .55; }
+#tJoy { position: fixed; pointer-events: auto; left: calc(34 * var(--u)); bottom: calc(26 * var(--u)); width: calc(150 * var(--u)); height: calc(150 * var(--u)); border-radius: 50%; background: radial-gradient(circle, rgba(255,255,255,.08), rgba(255,255,255,.16)); border: 2px solid rgba(255,255,255,.25); touch-action: none; }
+#tKnob { position: absolute; left: 50%; top: 50%; width: calc(62 * var(--u)); height: calc(62 * var(--u)); margin: calc(-31 * var(--u)) 0 0 calc(-31 * var(--u)); border-radius: 50%; background: rgba(230,238,252,.55); box-shadow: 0 2px 10px rgba(0,0,0,.4); }
+#tAtk { right: calc(24 * var(--u)); bottom: calc(22 * var(--u)); width: calc(96 * var(--u)); height: calc(96 * var(--u)); font-size: calc(17 * var(--u)) !important; background: rgba(150,40,40,.6) !important; }
+#tLast { right: calc(206 * var(--u)); bottom: calc(18 * var(--u)); width: calc(48 * var(--u)); height: calc(48 * var(--u)); font-size: calc(12 * var(--u)) !important; }
+#touch .sk { width: calc(64 * var(--u)); height: calc(64 * var(--u)); }
+#touch .sk b { font-size: calc(11 * var(--u)); z-index: 1; max-width: 90%; word-break: keep-all; }
+#touch .sk em { font-style: normal; font-size: calc(10 * var(--u)); color: #fde68a; z-index: 1; }
+#touch .sk .pip { font-size: calc(10 * var(--u)); color: #fde68a; z-index: 1; height: calc(9 * var(--u)); line-height: .6; }
+#touch .sk .cd { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,.6); font-style: normal; font-size: calc(20 * var(--u)); display: flex; align-items: center; justify-content: center; }
+#tS0 { right: calc(132 * var(--u)); bottom: calc(38 * var(--u)); }
+#tS1 { right: calc(118 * var(--u)); bottom: calc(118 * var(--u)); }
+#tS2 { right: calc(40 * var(--u)); bottom: calc(132 * var(--u)); }
+#tS3 { right: calc(196 * var(--u)); bottom: calc(132 * var(--u)); border-color: rgba(253,224,71,.6) !important; }
+#touch .lv { width: calc(30 * var(--u)); height: calc(30 * var(--u)); background: #f59e0b !important; color: #111 !important; font-size: calc(18 * var(--u)) !important; display: none !important; }
+#touch .lv.show { display: flex !important; }
+#tL0 { right: calc(180 * var(--u)); bottom: calc(84 * var(--u)); }
+#tL1 { right: calc(166 * var(--u)); bottom: calc(164 * var(--u)); }
+#tL2 { right: calc(88 * var(--u)); bottom: calc(178 * var(--u)); }
+#tL3 { right: calc(244 * var(--u)); bottom: calc(178 * var(--u)); }
+#touch .sp { width: calc(50 * var(--u)); height: calc(50 * var(--u)); font-size: calc(12 * var(--u)) !important; }
+#touch .sp.ready { border-color: #fde68a; box-shadow: 0 0 12px #fde68a; }
+#tD { right: calc(272 * var(--u)); bottom: calc(22 * var(--u)); }
+#tF { right: calc(272 * var(--u)); bottom: calc(80 * var(--u)); }
+#touch .mini { width: calc(52 * var(--u)); height: calc(52 * var(--u)); font-size: calc(11 * var(--u)) !important; }
+#tRecall { left: calc(206 * var(--u)); bottom: calc(22 * var(--u)); }
+#tShop { left: calc(206 * var(--u)); bottom: calc(82 * var(--u)); }
+#tGold { color: #fde68a; font-size: calc(10 * var(--u)); }
+#touch .tiny { border-radius: 8px; width: calc(40 * var(--u)); height: calc(30 * var(--u)); top: 6px; font-size: calc(12 * var(--u)) !important; }
+#tPause { left: 8px; } #tTab { left: calc(8px + 46 * var(--u)); } #tFull { left: calc(8px + 92 * var(--u)); }
+#tCancel { position: fixed; left: 50%; top: calc(54 * var(--u)); transform: translateX(-50%); padding: 10px 22px; border-radius: 14px; background: rgba(120,20,20,.55); border: 2px dashed rgba(255,255,255,.5); color: #fff; font: 800 14px system-ui; display: none; }
+#touch.aiming #tCancel { display: block; }
+#tCancel.hot { background: rgba(220,40,40,.85); }
+#rotate { position: fixed; inset: 0; z-index: 50; background: #050912; color: #e6eefc; display: none; align-items: center; justify-content: center; text-align: center; font: 700 18px system-ui; padding: 20px; }
+@media (orientation: portrait) { body.mobile #rotate { display: flex; } }
+/* 작은 가로 화면(휴대폰): 메뉴·상점을 촘촘하게, 상점 닫기 버튼은 항상 보이게 */
+@media (max-height: 520px) {
+  .panel { padding: 14px 14px 12px; }
+  h1 { font-size: 26px; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+  .grid .d, .grid ul { display: none; }
+  .help { font-size: 12px; }
+  #shopClose { position: fixed; top: 10px; right: 14px; z-index: 30; }
+}

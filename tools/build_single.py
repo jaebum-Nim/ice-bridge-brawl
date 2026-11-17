@@ -62,3 +62,8 @@ out = os.path.join(ROOT, 'play.html')
 with open(out, 'w', encoding='utf-8') as f:
     f.write(html)
 print(f'play.html 생성 완료 ({os.path.getsize(out) / 1024 / 1024:.1f} MB, 모듈 {len(mods)}개)')
+
+# 문법 검사 (주석이 한 줄 코드를 삼키는 실수 등)
+import subprocess, glob
+bad = [f for f in sorted(glob.glob('js/*.js')) if subprocess.run(['node', '--experimental-default-type=module', '--check', f], capture_output=True).returncode]
+if bad: raise SystemExit('문법 오류: ' + ', '.join(bad))

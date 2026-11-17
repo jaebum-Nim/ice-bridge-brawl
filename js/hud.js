@@ -4,7 +4,7 @@ import { MAP_W, LANE_Y1, LANE_Y2, TEAMC, TEAMN, ITEMS, itemStats, need, effMs, c
 const FONT = 'system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif';
 export class Hud {
   constructor(canvas) { this.cv = canvas; this.ctx = canvas.getContext('2d'); this.rects = []; this.resize(); }
-  resize() { this.DPR = Math.min(2, window.devicePixelRatio || 1); this.W = window.innerWidth; this.H = window.innerHeight; this.cv.width = this.W * this.DPR; this.cv.height = this.H * this.DPR; }
+  resize() { this.DPR = Math.min(window.matchMedia && matchMedia('(pointer: coarse)').matches ? 1.5 : 2, window.devicePixelRatio || 1); /* 터치 기기는 HUD 해상도를 조금 낮춤 */ this.W = window.innerWidth; this.H = window.innerHeight; this.cv.width = this.W * this.DPR; this.cv.height = this.H * this.DPR; }
   txt(s, x, y, size, col, align, weight, stroke) { const c = this.ctx; c.font = `${weight || 600} ${size}px ${FONT}`; c.textAlign = align || 'left'; if (stroke) { c.lineWidth = stroke; c.strokeStyle = 'rgba(0,0,0,.75)'; c.strokeText(s, x, y); } c.fillStyle = col; c.fillText(s, x, y); }
   rr(x, y, w, h, r) { const c = this.ctx; c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
   bar(x, y, w, h, u, col, ticks) {

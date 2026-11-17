@@ -15,26 +15,45 @@ function seeded(s) { return () => { s = (s * 16807) % 2147483647; return (s - 1)
 
 /* ---------- 파티클 ---------- */
 class Particles {
-  constructor(scene, n = 500) {
-    this.pool = []; this.live = [];
-    for (let i = 0; i < n; i++) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })); s.visible = false; scene.add(s); this.pool.push(s); }
+  // 파티클 전부를 점 하나의 묶음(Points)으로: 몇 개가 떠 있든 그리기 호출 1번
+  constructor(scene, n = 700) {
+    this.n = n; this.live = [];
+    const g = new THREE.BufferGeometry();
+    this.pos = new Float32Array(n * 3); this.col = new Float32Array(n * 3); this.alpha = new Float32Array(n); this.size = new Float32Array(n);
+    g.setAttribute('position', new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage));
+    g.setAttribute('aColor', new THREE.BufferAttribute(this.col, 3).setUsage(THREE.DynamicDrawUsage));
+    g.setAttribute('aAlpha', new THREE.BufferAttribute(this.alpha, 1).setUsage(THREE.DynamicDrawUsage));
+    g.setAttribute('aSize', new THREE.BufferAttribute(this.size, 1).setUsage(THREE.DynamicDrawUsage));
+    g.setDrawRange(0, 0); g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e5);
+    this.mat = new THREE.ShaderMaterial({
+      uniforms: { uMap: { value: glowTex() }, uScale: { value: 500 } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      vertexShader: `attribute vec3 aColor; attribute float aAlpha; attribute float aSize; uniform float uScale; varying vec3 vC; varying float vA;
+        void main() { vC = aColor; vA = aAlpha; vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_PointSize = aSize * uScale / -mv.z; gl_Position = projectionMatrix * mv; }`,
+      fragmentShader: `uniform sampler2D uMap; varying vec3 vC; varying float vA;
+        void main() { vec4 t = texture2D(uMap, gl_PointCoord); gl_FragColor = vec4(vC * t.rgb, t.a * vA);
+        #include <colorspace_fragment>
+        }`
+    });
+    this.pts = new THREE.Points(g, this.mat); this.pts.frustumCulled = false; this.pts.renderOrder = 5; scene.add(this.pts); this.geo = g; this.tmp = new THREE.Color();
   }
+  setScale(hPx, fovDeg) { this.mat.uniforms.uScale.value = hPx / (2 * Math.tan(fovDeg * Math.PI / 360)); }
   emit(x, y, z, o) {
-    const s = this.pool.pop(); if (!s) return;
-    s.visible = true; s.position.set(x, y, z); s.material.color.set(o.c || 0xffffff); s.material.opacity = o.a ?? 1; s.material.rotation = Math.random() * 6;
-    const p = { s, vx: o.vx || 0, vy: o.vy || 0, vz: o.vz || 0, g: o.g ?? 0, life: o.life || .6, t: 0, size: o.size || .3, grow: o.grow ?? 0, a: o.a ?? 1, drag: o.drag ?? 1 };
-    s.scale.set(p.size, p.size, 1); this.live.push(p);
+    if (this.live.length >= this.n) return;
+    this.tmp.set(o.c || 0xffffff);
+    this.live.push({ x, y, z, r: this.tmp.r, g: this.tmp.g, b: this.tmp.b, vx: o.vx || 0, vy: o.vy || 0, vz: o.vz || 0, gr: o.g ?? 0, life: o.life || .6, t: 0, size: o.size || .3, grow: o.grow ?? 0, a: o.a ?? 1, drag: o.drag ?? 1 });
   }
   burst(x, y, z, n, o) { for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, sp = (o.speed || 3) * (.4 + Math.random() * .6), up = o.up ?? 2; this.emit(x, y, z, { ...o, vx: Math.cos(a) * sp, vz: Math.sin(a) * sp, vy: up * (.3 + Math.random()), size: (o.size || .3) * (.6 + Math.random() * .8) }); } }
   update(dt) {
-    for (let i = this.live.length - 1; i >= 0; i--) {
-      const p = this.live[i]; p.t += dt; const k = p.t / p.life;
-      if (k >= 1) { p.s.visible = false; this.pool.push(p.s); this.live.splice(i, 1); continue; }
-      p.vy -= p.g * dt; const dr = Math.pow(p.drag, dt * 60); p.vx *= dr; p.vz *= dr; p.vy *= dr;
-      p.s.position.x += p.vx * dt; p.s.position.y += p.vy * dt; p.s.position.z += p.vz * dt;
-      if (p.s.position.y < .03) { p.s.position.y = .03; p.vy = 0; }
-      const sz = p.size * (1 + p.grow * k); p.s.scale.set(sz, sz, 1); p.s.material.opacity = p.a * (1 - k) * (k < .1 ? k * 10 : 1);
+    let k = 0; const L = this.live;
+    for (let i = 0; i < L.length; i++) {
+      const p = L[i]; p.t += dt; const f = p.t / p.life; if (f >= 1) continue;
+      p.vy -= p.gr * dt; const dr = Math.pow(p.drag, dt * 60); p.vx *= dr; p.vz *= dr; p.vy *= dr;
+      p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt; if (p.y < .03) { p.y = .03; p.vy = 0; }
+      this.pos[k * 3] = p.x; this.pos[k * 3 + 1] = p.y; this.pos[k * 3 + 2] = p.z; this.col[k * 3] = p.r; this.col[k * 3 + 1] = p.g; this.col[k * 3 + 2] = p.b;
+      this.size[k] = p.size * (1 + p.grow * f); this.alpha[k] = p.a * (1 - f) * (f < .1 ? f * 10 : 1); L[k++] = p;
     }
+    L.length = k; this.geo.setDrawRange(0, k);
+    for (const n of ['position', 'aColor', 'aAlpha', 'aSize']) { const at = this.geo.attributes[n]; at.needsUpdate = true; }
   }
 }
 
@@ -56,7 +75,7 @@ export class Renderer {
     this.ray = new THREE.Raycaster(); this.groundPlane = new THREE.Plane(UP, 0);
     this.quality = 'high'; this.shake = 0; this.camT = new THREE.Vector3(30, 0, 7);
     this.buildWorld();
-    this.parts = new Particles(this.scene);
+    this.parts = new Particles(this.scene); this.parts.setScale(this.H * this.r.getPixelRatio(), this.cam.fov);
     this.views = new Map(); this.pviews = new Map(); this.zviews = new Map(); this.fxl = []; this.pools = {};
     this.geo = { arrow: new THREE.ConeGeometry(.05, .5, 5), bigArrow: new THREE.ConeGeometry(.35, 2.2, 6), chain: new THREE.OctahedronGeometry(.18, 0), snow: new THREE.SphereGeometry(.28, 10, 8), towerShot: new THREE.SphereGeometry(.2, 10, 8), orb: new THREE.SphereGeometry(.26, 12, 10), auto: new THREE.SphereGeometry(.09, 8, 6),
       spike: new THREE.ConeGeometry(.12, .9, 5), unitBox: new THREE.BoxGeometry(1, 1, 1), slash: new THREE.TorusGeometry(.55, .05, 4, 16, 2.4), sphere: new THREE.SphereGeometry(1, 24, 16), column: new THREE.CylinderGeometry(.6, .6, 3, 20, 1, true), swordBlade: new THREE.BoxGeometry(.25, 3.2, .7) };
@@ -71,6 +90,7 @@ export class Renderer {
     const pr = this.quality === 'high' ? Math.min(dpr, 1.5) : this.quality === 'mid' ? 1 : Math.min(1, dpr) * .75;
     this.r.setPixelRatio(pr); this.r.setSize(w, h, false);
     this.cam.aspect = w / h; this.cam.updateProjectionMatrix(); this.W = w; this.H = h;
+    if (this.parts) this.parts.setScale(h * pr, this.cam.fov);
   }
 
   /* ---------- 월드 ---------- */
@@ -144,7 +164,7 @@ export class Renderer {
       const R = buildMonster(u.mon, u.big); root = new THREE.Group(); root.add(R.g, this.blob(u.r * K * 1.1));
       v = { kind: 'minion', root, R, phase: Math.random() * 6 };
     } else if (u.kind === 'minion') {
-      const R = buildMinion(u.mk, u.team, tc); R.g.scale.setScalar(1.2); root = new THREE.Group(); root.add(R.g, this.blob(u.mk === 's' ? .5 : .35));
+      const R = buildMinion(u.mk, u.team, tc); R.base = 1.2; R.g.scale.setScalar(1.2); root = new THREE.Group(); root.add(R.g, this.blob(u.mk === 's' ? .5 : .35));
       v = { kind: 'minion', root, R, phase: Math.random() * 6 };
     } else {
       const R = u.kind === 'tower' ? buildTower(u.team, tc) : buildNexus(u.team, tc); root = R.g; root.add(this.blob(u.kind === 'tower' ? 1.1 : 1.7));
@@ -175,7 +195,7 @@ export class Renderer {
         if (v.R.legL) { v.R.legL.rotation.z = Math.sin(v.phase) * .5 * (sp > 20 ? 1 : 0); v.R.legR.rotation.z = -v.R.legL.rotation.z; }
         const at = t - u.atkT; if (v.R.armR) v.R.armR.rotation.z = at < .3 ? Math.sin(at / .3 * Math.PI) * 1.6 : 0;
         if (v.R.orb) v.R.orb.position.y = .6 + Math.sin(t * 4 + u.id) * .05;
-        const hurt = t - (u.hurtT || -9); v.R.g.scale.setScalar(hurt < .12 ? 1.08 : 1);
+        const hurt = t - (u.hurtT || -9); v.R.g.scale.setScalar((v.R.base || 1) * (hurt < .12 ? 1.08 : 1));
       } else {
         if (u.dead && !v.wasDead) { v.wasDead = true; v.R.alive.forEach(o => o.visible = false); v.R.rubble.visible = true; }
         if (!u.dead) { v.R.crystal.rotation.y += dt * (v.kind === 'nexus' ? .6 : 1.2); v.R.crystal.position.y = (v.kind === 'nexus' ? 2.1 : 3.6) + Math.sin(t * 2 + u.id) * .08; const hurt = t - (u.hurtT || -9); v.R.glow.material.opacity = (v.kind === 'nexus' ? .35 : .45) * (hurt < .15 ? 2 : 1); }

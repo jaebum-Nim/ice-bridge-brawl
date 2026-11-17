@@ -879,7 +879,7 @@ export function update(dt) {
   updateProjs(dt); updateZones(dt); physics();
   for (const u of G.units) if (u.mobile && !u.dead && u.px !== undefined) { u.vx = (u.x - u.px) / dt; u.vy = (u.y - u.py) / dt; if (u.vx * u.vx + u.vy * u.vy > 400 && !u.target) u.face = Math.atan2(u.vy, u.vx); }
   for (const h of G.heroes) { if (h.dead) continue; const ef = G.map.fountain[1 - h.team]; if (Math.hypot(h.x - ef.x, h.y - ef.y) < 520) dmg(null, h, 900 * dt, 't'); }
-  G.units = G.units.filter(u => !(u.dead && (u.kind === 'minion' || u.kind === 'monster')));
+  if (G.units.some(u => u.dead && (u.kind === 'minion' || u.kind === 'monster'))) G.units = G.units.filter(u => !(u.dead && (u.kind === 'minion' || u.kind === 'monster')));
 }
 function updateProjs(dt) {
   for (const p of G.projs) {
@@ -904,10 +904,11 @@ function updateZones(dt) {
   G.zones = G.zones.filter(z => !z.fired);
 }
 function physics() {
-  const mob = G.units.filter(u => u.mobile && !u.dead);
+  // x 순으로 정렬해 가까운 쌍만 검사 (모든 쌍 비교 대신)
+  const mob = G.units.filter(u => u.mobile && !u.dead).sort((a, b) => a.x - b.x); let maxR = 0; for (const u of mob) if (u.r > maxR) maxR = u.r;
   for (let i = 0; i < mob.length; i++) {
-    const a = mob[i]; for (let j = i + 1; j < mob.length; j++) {
-      const b = mob[j]; const rr = (a.r + b.r) * .75, dx = b.x - a.x, dy = b.y - a.y; if (Math.abs(dx) > rr || Math.abs(dy) > rr) continue; const d = Math.hypot(dx, dy) || .01; if (d < rr) {
+    const a = mob[i], lim = (a.r + maxR) * .75; for (let j = i + 1; j < mob.length; j++) {
+      const b = mob[j]; const dx = b.x - a.x; if (dx > lim) break; const rr = (a.r + b.r) * .75, dy = b.y - a.y; if (dx > rr || Math.abs(dy) > rr) continue; const d = Math.hypot(dx, dy) || .01; if (d < rr) {
         const o = (rr - d) / 2, nx = dx / d, ny = dy / d;
         const la = a.kind === 'minion' || a.kind === 'monster', lb = b.kind === 'minion' || b.kind === 'monster'; // 영웅은 미니언·몬스터에게 밀리지 않음
         let wa = a.dash ? 0 : (a.kind === 'hero' && lb ? 0 : b.kind === 'hero' && la ? 2 : 1), wb = b.dash ? 0 : (b.kind === 'hero' && la ? 0 : a.kind === 'hero' && lb ? 2 : 1);
@@ -921,7 +922,7 @@ function physics() {
     for (const s of st) { const dx = u.x - s.x, dy = u.y - s.y, d = Math.hypot(dx, dy) || .01, rr = u.r + s.r * .8; if (d < rr) {
       const nx = dx / d, ny = dy / d, mx = u.x - (u.px ?? u.x), my = u.y - (u.py ?? u.y); let side = Math.sign(mx * -ny + my * nx) || (u.id % 2 ? 1 : -1); // 구조물에 막히면 옆으로 돌아감
       u.x = s.x + nx * rr - ny * side * 4; u.y = s.y + ny * rr + nx * side * 4; } }
-    if (!u.dash) [u.x, u.y] = G.map.clampPt(u.x, u.y, u.r);
+    if (!u.dash && (!G.map.grid || !G.map.walk(u.x, u.y))) [u.x, u.y] = G.map.clampPt(u.x, u.y, u.r);
   }
 }
 function fx(type, x, y, o) { G.fxq.push(Object.assign({ type, x, y, dur: .45 }, o || {})); }

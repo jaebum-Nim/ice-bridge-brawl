@@ -68,14 +68,25 @@ export function riftMap() {
   // 화면의 벽 높이와 실제 이동 판정이 모두 이 함수 하나에서 나옴
   const W_LANE = 310, W_RIVER = 300, W_CAMP = 400, W_PATH = 210, W_BASE = 1150, EDGE = 250;
   const SH = { lane: W_LANE, river: W_RIVER, camp: W_CAMP, path: W_PATH, base: W_BASE };
+  // 부호 거리장: 25단위 격자점마다 미리 계산 (모양마다 주변 칸에만 '도장' 찍듯 갱신 → 빠름).
+  // 격자 사이는 쌍선형 보간. 벽 깊이는 CAP까지만 정확하면 충분 (벽 높이·나무 배치용)
+  const FS = 25, FW = S / FS + 1, CAP = 400, field = new Float32Array(FW * FW).fill(CAP);
+  const stampSeg = (ax, ay, bx, by, w) => {
+    const m = w + CAP, i0 = Math.max(0, Math.floor((Math.min(ax, bx) - m) / FS)), i1 = Math.min(FW - 1, Math.ceil((Math.max(ax, bx) + m) / FS));
+    const j0 = Math.max(0, Math.floor((Math.min(ay, by) - m) / FS)), j1 = Math.min(FW - 1, Math.ceil((Math.max(ay, by) + m) / FS));
+    const dx = bx - ax, dy = by - ay, l = dx * dx + dy * dy;
+    for (let j = j0; j <= j1; j++) { const y = j * FS; for (let i = i0; i <= i1; i++) { const x = i * FS; let t = l ? ((x - ax) * dx + (y - ay) * dy) / l : 0; t = t < 0 ? 0 : t > 1 ? 1 : t; const d = Math.hypot(x - ax - t * dx, y - ay - t * dy) - w, k = j * FW + i; if (d < field[k]) field[k] = d; } }
+  };
+  const stampPoly = (pts, w) => { for (let i = 0; i < pts.length - 1; i++) stampSeg(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], w); };
+  for (const b of baseC) stampSeg(b[0], b[1], b[0], b[1], W_BASE);
+  for (const L of Object.values(lanes)) stampPoly(L.pts, W_LANE);
+  stampPoly(river, W_RIVER);
+  for (const c of camps) stampSeg(c.x, c.y, c.x, c.y, W_CAMP);
+  for (const p of paths) stampPoly(p, W_PATH);
+  for (let j = 0; j < FW; j++) for (let i = 0; i < FW; i++) { const x = i * FS, y = j * FS, k = j * FW + i; field[k] = Math.max(field[k], EDGE - x, EDGE - y, x - (S - EDGE), y - (S - EDGE)); }
   function sdf(x, y) {
-    let d = 1e9;
-    for (const b of baseC) d = Math.min(d, Math.hypot(x - b[0], y - b[1]) - W_BASE);
-    for (const L of Object.values(lanes)) d = Math.min(d, polyD(L.pts, x, y) - W_LANE);
-    d = Math.min(d, polyD(river, x, y) - W_RIVER);
-    for (const c of camps) d = Math.min(d, Math.hypot(x - c.x, y - c.y) - W_CAMP);
-    for (const p of paths) d = Math.min(d, polyD(p, x, y) - W_PATH);
-    return Math.max(d, EDGE - x, EDGE - y, x - (S - EDGE), y - (S - EDGE));
+    const gx = clamp(x / FS, 0, FW - 1.001), gy = clamp(y / FS, 0, FW - 1.001), i = Math.floor(gx), j = Math.floor(gy), tx = gx - i, ty = gy - j, k = j * FW + i;
+    return (field[k] * (1 - tx) + field[k + 1] * tx) * (1 - ty) + (field[k + FW] * (1 - tx) + field[k + FW + 1] * tx) * ty;
   }
   // 이동 판정용 고해상도 비트맵 (10단위)
   const FR = 10, FN = S / FR, fine = new Uint8Array(FN * FN);
@@ -146,7 +157,7 @@ export function riftMap() {
   }
   const X = (t, p) => t ? MIR(p) : p;
   return {
-    id: 'rift', W: S, H: S, N, grid, cellAt, walk, clampPt, los, path, sdf, SH, lanes, river, camps, paths, fountain,
+    id: 'rift', W: S, H: S, N, grid, cellAt, walk, clampPt, los, path, sdf, SH, field, FS, FW, lanes, river, camps, paths, fountain,
     inBase(t, x, y) { const f = this.fountain[t]; return Math.hypot(x - f.x, y - f.y) < 1000; },
     // 라인 포탑 3개 중 하나라도 부서지면 넥서스 포탑, 넥서스 포탑이 부서지면 넥서스
     structs: t => {

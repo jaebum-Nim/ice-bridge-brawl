@@ -1,5 +1,6 @@
 // 로우폴리 3D 모델 (모두 코드로 생성, 외부 에셋 없음)
 import * as THREE from 'three';
+import { mergeStatic } from './merge.js';
 
 export const K = 0.01; // 게임 좌표 1 = 0.01 월드 단위
 
@@ -136,6 +137,7 @@ export function buildMinion(kind, team, tc) {
     const c = M(G.cannon, m.metal, .2, .55, 0); c.rotation.z = -Math.PI / 2 + .3; body.add(c);
     body.add(M(box(.02, .3, .18), m.trim, -.25, .7, 0));
   }
+  mergeStatic(body, R); // 움직이지 않는 부품을 재질별로 합쳐 그리기 호출 수 줄임
   return R;
 }
 
@@ -195,5 +197,6 @@ export function buildMonster(type, big) {
     body.add(M(box(.3, .12, .3), sk, .3, .06, .38), M(box(.3, .12, .3), sk, .3, .06, -.38));
     g.scale.setScalar(1.25);
   }
+  mergeStatic(body, R);
   return R;
 }

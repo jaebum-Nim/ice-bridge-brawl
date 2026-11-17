@@ -227,7 +227,7 @@ function startGame() {
   Object.assign(S, { sel: null, aiming: -1, amove: false, paused: false, shopOpen: false, camOff: 0, camAt: null, texts: [], feed: [], banner: null });
   R.reset();
   G = Sim.newGame({ mode: M.mode, pick: M.hero, enemy: M.enemy, diff: M.diff, autoSkill: M.autoSkill, pos: M.pos });
-  window.G = G; window.Sim = Sim; window.R = R; window.S = S; // 디버그/테스트용
+  window.G = G; window.Sim = Sim; window.R = R; window.S = S; window.HUD = hud; // 디버그/테스트용
   openShop();
 }
 function endGame(winner) {

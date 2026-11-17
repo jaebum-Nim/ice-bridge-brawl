@@ -56,18 +56,27 @@ export function buildRiftTerrain(group, M, K, maxAniso = 4, texSize = 4096) {
   // 높이: 이동 가능한 칸은 정확히 평평(0), 벽 칸은 경계에서부터 솟아오름 → 화면의 벽 = 실제로 못 가는 곳
   const RISE = 60;
   const heightAt = (wx, wz) => { const px = wx / K, pz = wz / K, d = M.sdf(px, pz); if (d <= 0) return 0; const t = Math.min(1, d / RISE), h = t * t * (3 - 2 * t); return h * 1.5 + (d > RISE * 1.5 ? Math.sin(px * .017) * Math.cos(pz * .013) * .15 : 0); };
-  const S = N * 2, geo = new THREE.PlaneGeometry(W, W, S, S); geo.rotateX(-Math.PI / 2); geo.translate(W / 2, 0, W / 2);
-  const pos = geo.attributes.position;
-  for (let i = 0; i < pos.count; i++) pos.setY(i, heightAt(pos.getX(i), pos.getZ(i)));
-  geo.computeVertexNormals();
-  // 경사면은 바위색, 꼭대기는 이끼색 (바닥 그림에 곱해짐)
-  const nrm = geo.attributes.normal, col = new Float32Array(pos.count * 3);
-  for (let i = 0; i < pos.count; i++) { const y = pos.getY(i), ny = nrm.getY(i), steep = Math.max(0, Math.min(1, (0.93 - ny) * 3)) * (y > .05 ? 1 : 0); const top = Math.min(1, y / 1.3);
-    let ao = 1; if (y < .01) { const d = -M.sdf(pos.getX(i) / K, pos.getZ(i) / K); ao = .72 + .28 * Math.min(1, Math.max(0, d) / 70); } // 벽 밑 그늘
-    col[i * 3] = (1 + steep * .55 - top * .05) * ao; col[i * 3 + 1] = (1 + steep * .2 + top * .08) * ao; col[i * 3 + 2] = (1 + steep * .25 - top * .1) * ao; }
-  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  // 지형을 8×8 조각으로 나눠 화면 밖 조각은 그리지 않음 (삼각형 수 대폭 감소)
+  // 높이는 부호 거리장의 격자점 값을 그대로 씀 (꼭짓점 간격 = 거리장 간격 25)
+  const FW = M.FW, FS = M.FS, field = M.field, CH = 8, SEG = (FW - 1) / CH; // 280 / 8 = 35
+  const hAt = (i, j) => { i = Math.max(0, Math.min(FW - 1, i)); j = Math.max(0, Math.min(FW - 1, j)); const d = field[j * FW + i]; if (d <= 0) return 0; const t = Math.min(1, d / RISE), h = t * t * (3 - 2 * t); const px = i * FS, pz = j * FS; return h * 1.5 + (d > RISE * 1.5 ? Math.sin(px * .017) * Math.cos(pz * .013) * .15 : 0); };
   const tex = new THREE.CanvasTexture(paintGround(M, texSize)); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = maxAniso;
-  const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ map: tex, vertexColors: true })); group.add(mesh);
+  const mat = new THREE.MeshLambertMaterial({ map: tex, vertexColors: true }), step = FS * K;
+  for (let cz = 0; cz < CH; cz++) for (let cx = 0; cx < CH; cx++) {
+    const n = SEG + 1, pos = new Float32Array(n * n * 3), nor = new Float32Array(n * n * 3), uv = new Float32Array(n * n * 2), col = new Float32Array(n * n * 3), idx = [];
+    for (let b = 0; b < n; b++) for (let a = 0; a < n; a++) {
+      const i = cx * SEG + a, j = cz * SEG + b, v = b * n + a, y = hAt(i, j);
+      pos[v * 3] = i * step; pos[v * 3 + 1] = y; pos[v * 3 + 2] = j * step; uv[v * 2] = i / (FW - 1); uv[v * 2 + 1] = 1 - j / (FW - 1);
+      let nx = -(hAt(i + 1, j) - hAt(i - 1, j)) / (2 * step), nz = -(hAt(i, j + 1) - hAt(i, j - 1)) / (2 * step); const l = Math.hypot(nx, 1, nz); nor[v * 3] = nx / l; nor[v * 3 + 1] = 1 / l; nor[v * 3 + 2] = nz / l;
+      // 경사면은 바위색, 꼭대기는 이끼색, 벽 밑은 그늘 (바닥 그림에 곱해짐)
+      const ny = 1 / l, steep = Math.max(0, Math.min(1, (0.93 - ny) * 3)) * (y > .05 ? 1 : 0), top = Math.min(1, y / 1.3), d = field[j * FW + i];
+      const ao = y < .01 ? .72 + .28 * Math.min(1, Math.max(0, -d) / 70) : 1;
+      col[v * 3] = (1 + steep * .55 - top * .05) * ao; col[v * 3 + 1] = (1 + steep * .2 + top * .08) * ao; col[v * 3 + 2] = (1 + steep * .25 - top * .1) * ao;
+    }
+    for (let b = 0; b < SEG; b++) for (let a = 0; a < SEG; a++) { const v = b * n + a; idx.push(v, v + n, v + 1, v + 1, v + n, v + n + 1); }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); geo.setAttribute('color', new THREE.BufferAttribute(col, 3)); geo.setIndex(idx);
+    geo.computeBoundingSphere(); geo.computeBoundingBox(); group.add(new THREE.Mesh(geo, mat));
+  }
   // 벽 위 나무 (낮은 다각형 원뿔, 한 번에 그림)
   const trees = []; let sd = 5; const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
   for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) {

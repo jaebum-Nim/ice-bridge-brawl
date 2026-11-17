@@ -2,6 +2,8 @@
 import * as THREE from 'three';
 import { buildBlockWorld } from './blocks.js';
 import { buildRiftTerrain } from './terrain.js';
+// iOS·iPadOS 사파리는 캔버스 한 장 1,677만 화소·전체 캔버스 메모리 제한이 있어 바닥 그림을 2048로
+const IOS = typeof navigator !== 'undefined' && (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent)));
 import { K, glowTex, glowSprite, mat, emis, buildMinion, buildTower, buildNexus, buildMonster } from './models.js';
 import { buildHero } from './heroes3d.js';
 import { MAP_W, LANE_Y1, LANE_Y2, MID_Y, FOUNTAIN, TEAMC, clampPt, pickTarget } from './sim.js';
@@ -83,7 +85,7 @@ export class Renderer {
     const key = M.id + (M.grid ? ':' + (this.quality === 'high' ? 'hi' : 'lo') : ''); if (this.mapId === key) return; this.mapId = key;
     if (this.worldG) { this.scene.remove(this.worldG); this.worldG.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
     const grp = new THREE.Group(); this.worldG = grp;
-    this.world = M.grid ? buildRiftTerrain(grp, M, K, this.r.capabilities.getMaxAnisotropy(), this.quality === 'high' && this.r.capabilities.maxTextureSize >= 4096 ? 4096 : 2048) : buildBlockWorld(grp, M.W * K, TEAMC);
+    this.world = M.grid ? buildRiftTerrain(grp, M, K, this.r.capabilities.getMaxAnisotropy(), this.quality === 'high' && this.r.capabilities.maxTextureSize >= 4096 && !IOS ? 4096 : 2048) : buildBlockWorld(grp, M.W * K, TEAMC);
     // 분수: 신호기처럼 위로 뻗는 빛 기둥 (단순 반투명 기둥)
     for (const t of [0, 1]) {
       const f = M.fountain[t], tc = new THREE.Color(TEAMC[t]);

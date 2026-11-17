@@ -10,8 +10,9 @@ let R = null, hud = null, G = null, touch = null;
 const S = { aiming: -1, amove: false, tab: false, paused: false, shopOpen: false, camOff: 0, camAt: null, texts: [], feed: [], banner: null, mx: 0, my: 0, mouse: { x: 0, y: 0 }, rightDown: false, canHit: u => Sim.canHitStructure(u) };
 const $ = id => document.getElementById(id);
 // 조작: pc(마우스·키보드) / pad(모바일 터치 패드). 터치 화면이면 처음엔 패드
-const COARSE = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
-let quality = COARSE ? 'mid' : 'high', castMode = 'normal', ctrl = COARSE ? 'pad' : 'pc'; // normal: 롤 기본(키→클릭), quick: 키 누르는 즉시, release: 떼는 순간
+const COARSE = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent)); // 아이패드는 데스크톱 사이트처럼 Mac으로 보고함
+const TABLET = COARSE && Math.min(screen.width, screen.height) >= 700;
+let quality = COARSE && !TABLET ? 'mid' : 'high', castMode = 'normal', ctrl = COARSE ? 'pad' : 'pc'; // normal: 롤 기본(키→클릭), quick: 키 누르는 즉시, release: 떼는 순간
 try { quality = localStorage.getItem('ibb-quality') || quality; castMode = localStorage.getItem('ibb-cast') || 'normal'; ctrl = localStorage.getItem('ibb-ctrl') || ctrl; } catch (e) { }
 const AIM_H = .75; // 스킬 조준은 몸통 높이 기준 (투사체가 날아가는 높이)
 
@@ -20,7 +21,7 @@ function initGfx() {
   try { R = new Renderer(glCv); hud = new Hud(hudCv); R.setQuality(quality); }
   catch (e) { console.error(e); $('menuErr').textContent = '이 브라우저에서 3D(WebGL)를 시작하지 못했습니다. 최신 Chrome/Edge/Firefox에서 열어주세요.'; return false; }
   window.addEventListener('resize', () => { R.resize(); hud.resize(); });
-  touch = initTouch({ S, R, hud, hudCv, getG: () => G, unitUnder: f => unitUnderMouse(f), toggleShop: () => { if (S.shopOpen) closeShop(); else if (G && !G.over) openShop(); }, onPause: () => { if (G && !G.over && !S.shopOpen) S.paused = !S.paused; } });
+  touch = initTouch({ S, R, hud, hudCv, getG: () => G, unitUnder: f => unitUnderMouse(f), toggleShop: () => { if (S.shopOpen) closeShop(); else if (G && !G.over) openShop(); }, onPause: () => { if (G && !G.over && !S.shopOpen) S.paused = !S.paused; }, notify: s => banner(s, '#fde68a', 3) });
   return true;
 }
 

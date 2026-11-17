@@ -24,6 +24,10 @@ export function initTouch(ctx) {
     <button id="tTab" class="tb tiny">점수</button>
     <button id="tFull" class="tb tiny">⛶</button>`;
   document.body.appendChild(root);
+  // iOS 사파리: user-scalable=no를 무시하므로 두 손가락 확대·두 번 톡 확대를 직접 막음
+  for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, e => { if (document.body.classList.contains('mobile')) e.preventDefault(); }, { passive: false });
+  document.addEventListener('touchmove', e => { if (document.body.classList.contains('mobile') && !e.target.closest('.ov')) e.preventDefault(); }, { passive: false });
+  let lastEnd = 0; document.addEventListener('touchend', e => { if (!document.body.classList.contains('mobile') || e.target.closest('.ov')) return; const t = Date.now(); if (t - lastEnd < 320) e.preventDefault(); lastEnd = t; }, { passive: false });
   const $ = id => root.querySelector('#' + id);
   const joy = $('tJoy'), knob = $('tKnob'), cancel = $('tCancel');
   const st = { joy: null, atk: null, last: null, aim: null };
@@ -116,7 +120,7 @@ export function initTouch(ctx) {
   const mmEnd = e => { if (e.pointerId === mmId) { mmId = null; S.camAt = null; } };
   hudCv.addEventListener('pointerup', mmEnd); hudCv.addEventListener('pointercancel', mmEnd);
 
-  function goFull() { const d = document.documentElement; const f = d.requestFullscreen || d.webkitRequestFullscreen; if (f && !document.fullscreenElement) { Promise.resolve(f.call(d)).then(() => screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape').catch(() => { })).catch(() => { }); } else if (document.exitFullscreen && document.fullscreenElement) document.exitFullscreen(); }
+  function goFull() { const d = document.documentElement; const f = d.requestFullscreen || d.webkitRequestFullscreen; if (!f) { ctx.notify && ctx.notify('이 브라우저는 전체 화면을 지원하지 않아요. 사파리 공유 → 홈 화면에 추가로 열면 전체 화면이 됩니다'); return; } if (!(document.fullscreenElement || document.webkitFullscreenElement)) { Promise.resolve(f.call(d)).then(() => screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape').catch(() => { })).catch(() => { }); } else if (document.exitFullscreen && document.fullscreenElement) document.exitFullscreen(); }
 
   /* ---------- 매 프레임: 이동·공격 명령, 버튼 표시 ---------- */
   function tick(dt) {

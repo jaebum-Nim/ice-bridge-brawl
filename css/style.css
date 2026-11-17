@@ -58,7 +58,8 @@ th{color:#9fb3d1;font-weight:600;font-size:12px}
 
 /* ---------- 모바일 패드 조작 ---------- */
 body.mobile, body.mobile canvas { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; overscroll-behavior: none; }
-#touch { position: fixed; inset: 0; z-index: 5; pointer-events: none; --u: min(1px, .26vh); }
+/* 버튼 크기 단위: 휴대폰(세로 390)은 1px, 아이패드(세로 744~1024)는 1.25~1.45px로 커짐 */
+#touch { position: fixed; inset: 0; z-index: 5; pointer-events: none; --u: clamp(.8px, .17vh + .32px, 1.45px); --sb: env(safe-area-inset-bottom, 0px); }
 #touch.hidden { display: none; }
 #touch .tb { position: fixed; pointer-events: auto; border-radius: 50%; border: 2px solid rgba(255,255,255,.35); background: rgba(12,20,36,.62); color: #e6eefc; font: 800 calc(13 * var(--u)) system-ui, sans-serif; display: flex; align-items: center; justify-content: center; flex-direction: column; overflow: hidden; touch-action: none; padding: 0; line-height: 1.1; }
 #touch .tb.on { background: rgba(70,110,170,.75); transform: scale(.95); }
@@ -97,6 +98,8 @@ body.mobile, body.mobile canvas { touch-action: none; -webkit-user-select: none;
 #tCancel.hot { background: rgba(220,40,40,.85); }
 #rotate { position: fixed; inset: 0; z-index: 50; background: #050912; color: #e6eefc; display: none; align-items: center; justify-content: center; text-align: center; font: 700 18px system-ui; padding: 20px; }
 @media (orientation: portrait) { body.mobile #rotate { display: flex; } }
+/* 아이패드 홈 막대 위로 버튼을 살짝 올림 */
+#tJoy, #tAtk, #tLast, #tS0, #tD, #tRecall { margin-bottom: var(--sb); }
 /* 작은 가로 화면(휴대폰): 메뉴·상점을 촘촘하게, 상점 닫기 버튼은 항상 보이게 */
 @media (max-height: 520px) {
   .panel { padding: 14px 14px 12px; }
